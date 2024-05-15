@@ -30,7 +30,6 @@ public class SegmentPool {
             List<byte[]> spilt = this.splitByteArray(bytes);
 
             for (byte[] b : spilt) {
-                //缓冲区已用完
                 Segment segment = new Segment(DEFAULT_CAPACITY);
                 segment.write(b);
                 int l = this.index.incrementAndGet();
