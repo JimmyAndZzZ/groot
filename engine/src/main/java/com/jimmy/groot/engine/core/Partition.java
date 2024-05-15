@@ -1,42 +1,48 @@
 package com.jimmy.groot.engine.core;
 
-import cn.hutool.core.map.MapUtil;
-import cn.hutool.crypto.SecureUtil;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.jimmy.groot.boot.exception.EngineException;
-import lombok.Data;
-import lombok.Getter;
+import com.jimmy.groot.sql.core.Wrapper;
+import com.jimmy.groot.sql.exception.EngineException;
+import com.jimmy.groot.engine.store.SegmentPool;
+import com.jimmy.groot.engine.store.SegmentSerializer;
 
-import java.io.Serializable;
-import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.Set;
 
-public class Partition {
 
-    @Getter
-    private final String code;
+public class Partition extends Element {
 
-    @Getter
-    private final Map<String, Object> key;
+    private final Set<String> uniqueKeys;
 
-    private final List<Fragment> fragments = Lists.newArrayList();
+    private final SegmentSerializer segmentSerializer;
 
-    public Partition(Map<String, Object> partitionKeys) {
-        if (MapUtil.isEmpty(partitionKeys)) {
-            throw new EngineException("分区键为空");
+    private final Map<String, Fragment> fragments = Maps.newHashMap();
+
+    public Partition(Set<String> uniqueKeys, SegmentSerializer segmentSerializer) {
+        this.uniqueKeys = uniqueKeys;
+        this.segmentSerializer = segmentSerializer;
+    }
+
+    public void remove(Wrapper wrapper) {
+
+    }
+
+    public void save(Map<String, Object> doc) {
+        Map<String, Object> uniqueData = Maps.newHashMap();
+
+        for (String uniqueKey : uniqueKeys) {
+            Object o = doc.get(uniqueKey);
+            if (o == null) {
+                throw new EngineException("主键为空,主键名:" + uniqueKey);
+            }
+
+            uniqueData.put(uniqueKey, o);
         }
-        // 将 Map 按 ASCII 码排序
-        Map<String, Object> sortedMap = new TreeMap<>(partitionKeys);
 
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, Object> entry : sortedMap.entrySet()) {
-            sb.append(entry.getKey()).append("=").append(entry.getValue().toString()).append("&");
-        }
-
-        this.key = partitionKeys;
-        this.code = SecureUtil.md5(sb.toString());
+        Fragment fragment = new Fragment();
+        fragment.setKey(uniqueData);
+        fragment.setIndex(SegmentPool.getInstance().allocate(segmentSerializer.serialize(doc)));
+        this.fragments.put(this.getCode(doc), fragment);
     }
 
 }

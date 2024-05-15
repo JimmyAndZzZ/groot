@@ -6,9 +6,8 @@ import com.esotericsoftware.kryo.kryo5.io.Output;
 import com.esotericsoftware.kryo.kryo5.objenesis.strategy.StdInstantiatorStrategy;
 import com.esotericsoftware.kryo.kryo5.serializers.MapSerializer;
 import com.google.common.collect.Maps;
-import com.jimmy.groot.boot.exception.EngineException;
+import com.jimmy.groot.sql.exception.EngineException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.util.LinkedCaseInsensitiveMap;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -21,13 +20,13 @@ import java.util.Map;
 @Slf4j
 public class SegmentSerializer {
 
+
     //由于Kryo是线程不安全的，所以我们这里使用ThreadLocal来解决线程安全问题
     public static ThreadLocal<Kryo> kryoThreadLocal = ThreadLocal.withInitial(() -> {
         Kryo kryo = new Kryo();
         kryo.register(HashMap.class, new MapSerializer());
         kryo.register(Timestamp.class);
         kryo.register(BigInteger.class);
-        kryo.register(LinkedCaseInsensitiveMap.class);
         kryo.register(BigDecimal.class);
         kryo.reference(false);
         kryo.setInstantiatorStrategy(new StdInstantiatorStrategy());

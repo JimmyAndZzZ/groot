@@ -3,7 +3,7 @@ package com.jimmy.groot.engine.store;
 
 import cn.hutool.core.collection.CollUtil;
 import com.google.common.collect.Lists;
-import com.jimmy.groot.boot.exception.EngineException;
+import com.jimmy.groot.sql.exception.EngineException;
 import io.netty.util.collection.IntObjectHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.xerial.snappy.Snappy;
@@ -17,9 +17,21 @@ public class SegmentPool {
 
     private final static int DEFAULT_CAPACITY = 32;
 
-    private final AtomicInteger index = new AtomicInteger(0);
+    private final AtomicInteger counter = new AtomicInteger(0);
 
-    private final IntObjectHashMap<Segment> extraPool = new IntObjectHashMap<>(216);
+    private final IntObjectHashMap<Segment> segmentPool = new IntObjectHashMap<>(216);
+
+    private static class SingletonHolder {
+        private static final SegmentPool INSTANCE = new SegmentPool();
+    }
+
+    public static SegmentPool getInstance() {
+        return SingletonHolder.INSTANCE;
+    }
+
+    private SegmentPool() {
+
+    }
 
     public List<Integer> allocate(byte[] bytes) {
         try {
@@ -32,8 +44,8 @@ public class SegmentPool {
             for (byte[] b : spilt) {
                 Segment segment = new Segment(DEFAULT_CAPACITY);
                 segment.write(b);
-                int l = this.index.incrementAndGet();
-                extraPool.put(l, segment);
+                int l = this.counter.incrementAndGet();
+                this.segmentPool.put(l, segment);
                 index.add(l);
             }
 
@@ -91,7 +103,7 @@ public class SegmentPool {
     }
 
     public void free(Integer index) {
-        Segment segment = extraPool.remove(index);
+        Segment segment = this.segmentPool.remove(index);
         if (segment != null) {
             segment.free();
         }
@@ -104,7 +116,7 @@ public class SegmentPool {
      * @return
      */
     private byte[] get(Integer index) {
-        return extraPool.get(index).read();
+        return this.segmentPool.get(index).read();
     }
 
     /**

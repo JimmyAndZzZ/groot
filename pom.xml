@@ -19,17 +19,23 @@
         <netty.version>4.1.70.Final</netty.version>
         <lombok.version>1.16.10</lombok.version>
         <kryo5.version>5.3.0</kryo5.version>
+        <logback.version>1.4.14</logback.version>
         <spring.boot.starter.version>2.1.2.RELEASE</spring.boot.starter.version>
     </properties>
 
     <modules>
-        <module>boot</module>
+        <module>sql</module>
         <module>center</module>
         <module>engine</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.esotericsoftware.kryo</groupId>
                 <artifactId>kryo5</artifactId>
