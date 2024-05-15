@@ -2,7 +2,6 @@ package com.jimmy.groot.engine.core;
 
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.crypto.SecureUtil;
-import com.jimmy.groot.sql.exception.EngineException;
 
 import java.io.Serializable;
 import java.util.Map;

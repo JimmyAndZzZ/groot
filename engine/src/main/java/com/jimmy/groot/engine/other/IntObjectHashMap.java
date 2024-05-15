@@ -1,7 +1,7 @@
 package com.jimmy.groot.engine.other;
 
 
-import com.jimmy.groot.sql.base.IntObjectMap;
+import com.jimmy.groot.engine.base.IntObjectMap;
 
 import java.util.*;
 
