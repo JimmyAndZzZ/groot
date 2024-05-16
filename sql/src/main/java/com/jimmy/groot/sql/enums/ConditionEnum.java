@@ -7,5 +7,19 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum ConditionEnum {
 
-    EQ, GT, GE, LE, LT, IN, NOT_IN, LIKE, NULL, NOT_NULL,NE,NOT_LIKE,RANGER
+    EQ(true),
+    GT(false),
+    GE(false),
+    LE(false),
+    LT(false),
+    IN(true),
+    NOT_IN(true),
+    LIKE(false),
+    NULL(false),
+    NOT_NULL(false),
+    NE(false),
+    NOT_LIKE(false),
+    RANGER(false);
+
+    private Boolean isNeedIndex;
 }

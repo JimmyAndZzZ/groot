@@ -255,13 +255,4 @@ public class Partition extends Element {
 
         return like;
     }
-
-    @Data
-    private static class UniqueConstraint {
-
-        private String code;
-
-        private Map<String, Object> uniqueData = Maps.newHashMap();
-    }
-
 }
