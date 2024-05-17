@@ -7,7 +7,7 @@ import java.io.Serializable;
 import java.util.Map;
 
 @Data
-public class UniqueConstraint implements Serializable {
+public class Unique implements Serializable {
 
     private String code;
 

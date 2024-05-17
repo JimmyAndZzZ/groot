@@ -5,7 +5,9 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public enum ConditionEnum {
+public enum IndexTypeEnum {
 
-    EQ, GT, GE, LE, LT, IN, NOT_IN, LIKE, NULL, NOT_NULL,NE,NOT_LIKE,RANGER
+    PRIMARY_KEY
 }
+
+

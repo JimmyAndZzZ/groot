@@ -3,7 +3,7 @@ package com.jimmy.groot.engine.store;
 
 import cn.hutool.core.collection.CollUtil;
 import com.google.common.collect.Lists;
-import com.jimmy.groot.sql.exception.EngineException;
+import com.jimmy.groot.engine.exception.EngineException;
 import io.netty.util.collection.IntObjectHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.xerial.snappy.Snappy;

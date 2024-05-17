@@ -2,22 +2,20 @@ package com.jimmy.groot.engine.core;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
-import cn.hutool.core.date.DatePattern;
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.googlecode.aviator.AviatorEvaluator;
 import com.googlecode.aviator.Expression;
+import com.jimmy.groot.engine.base.Index;
 import com.jimmy.groot.engine.exception.EngineException;
 import com.jimmy.groot.sql.core.Condition;
 import com.jimmy.groot.sql.core.ConditionGroup;
-import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.core.Wrapper;
 import com.jimmy.groot.engine.store.SegmentPool;
 import com.jimmy.groot.engine.store.SegmentSerializer;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
-import lombok.Data;
 
 import java.util.*;
 
@@ -32,6 +30,8 @@ public class Partition extends Element {
 
     private final SegmentSerializer segmentSerializer;
 
+    private final Map<String, Index> indexes = Maps.newHashMap();
+
     private final Map<String, Fragment> fragments = Maps.newHashMap();
 
     public Partition(Set<String> uniqueKeys, SegmentSerializer segmentSerializer) {
@@ -40,8 +40,11 @@ public class Partition extends Element {
     }
 
     public List<Map<String, Object>> queryList(Wrapper wrapper) {
-        Map<String, Object> conditionTarget = Maps.newHashMap();
-        String conditionExp = this.getConditionExp(wrapper.getQueryPlus(), conditionTarget);
+        List<ConditionPart> parts = this.getConditionExp(wrapper.getQueryPlus().getConditionGroups());
+
+        for (ConditionPart part : parts) {
+
+        }
 
         Expression expression = AviatorEvaluator.compile(conditionExp);
 
@@ -53,33 +56,13 @@ public class Partition extends Element {
 
     }
 
-    public void saveBatch(List<Map<String, Object>> docs) {
-        for (Map<String, Object> doc : docs) {
-            this.save(doc);
-        }
-    }
-
-    public void remove(Map<String, Object> doc) {
-        UniqueConstraint uniqueConstraint = this.getUniqueConstraint(doc);
-        fragments.remove(uniqueConstraint.getCode());
-    }
-
-    public void save(Map<String, Object> doc) {
-        UniqueConstraint uniqueConstraint = this.getUniqueConstraint(doc);
-
-        Fragment fragment = new Fragment();
-        fragment.setKey(uniqueConstraint.getUniqueData());
-        fragment.setIndex(SegmentPool.getInstance().allocate(segmentSerializer.serialize(doc)));
-        this.fragments.put(uniqueConstraint.getCode(), fragment);
-    }
-
     /**
      * 获取唯一约束
      *
      * @param doc
      * @return
      */
-    private UniqueConstraint getUniqueConstraint(Map<String, Object> doc) {
+    private Unique getUnique(Map<String, Object> doc) {
         Map<String, Object> uniqueData = Maps.newHashMap();
 
         for (String uniqueKey : uniqueKeys) {
@@ -91,61 +74,41 @@ public class Partition extends Element {
             uniqueData.put(uniqueKey, o);
         }
 
-        UniqueConstraint uniqueConstraint = new UniqueConstraint();
-        uniqueConstraint.setUniqueData(uniqueData);
-        uniqueConstraint.setCode(this.getCode(uniqueData));
-        return uniqueConstraint;
+        Unique unique = new Unique();
+        unique.setUniqueData(uniqueData);
+        unique.setCode(this.getCode(uniqueData));
+        return unique;
     }
 
     /**
      * 获取表达式
      */
-    private String getConditionExp(QueryPlus queryPlus, Map<String, Object> target) {
+    private List<ConditionPart> getConditionExp(List<ConditionGroup> conditionGroups) {
         int i = 0;
-        List<Condition> conditions = queryPlus.getConditions();
-        List<ConditionGroup> conditionGroups = queryPlus.getConditionGroups();
-        //条件表达式模板
-        StringBuilder conditionExp = new StringBuilder();
-        //条件拼接
-        if (CollUtil.isNotEmpty(conditions)) {
-            StringBuilder conditionsExp = new StringBuilder();
-
-            for (Condition condition : conditions) {
-                if (StrUtil.isNotBlank(conditionsExp)) {
-                    conditionsExp.append(condition.getConditionTypeEnum().getExpression());
-                }
-
-                conditionsExp.append(this.getExpCondition(condition.getFieldName(), condition.getFieldValue(), condition.getConditionEnum(), target, i++));
-            }
-
-            conditionExp.append("(").append(conditionExp).append(")");
-        }
+        List<ConditionPart> parts = Lists.newArrayList();
         //遍历关联关系
         for (ConditionGroup conditionGroup : conditionGroups) {
             List<Condition> groupConditions = conditionGroup.getConditions();
-            ConditionTypeEnum conditionTypeEnum = conditionGroup.getConditionTypeEnum();
 
             if (CollUtil.isNotEmpty(groupConditions)) {
+                ConditionPart part = new ConditionPart();
+
                 StringBuilder childCondition = new StringBuilder();
                 for (Condition condition : groupConditions) {
                     if (StrUtil.isNotBlank(childCondition)) {
-                        childCondition.append(condition.getConditionTypeEnum().getExpression());
+                        childCondition.append(ConditionTypeEnum.AND.getExpression());
                     }
 
-                    childCondition.append(this.getExpCondition(condition.getFieldName(), condition.getFieldValue(), condition.getConditionEnum(), target, i++));
+                    part.getMayNeedIndexFields().add(condition.getFieldName());
+                    childCondition.append(this.getExpCondition(condition.getFieldName(), condition.getFieldValue(), condition.getConditionEnum(), part.getConditionArgument(), i++));
                 }
 
-                if (StrUtil.isNotBlank(childCondition)) {
-                    if (StrUtil.isNotBlank(conditionExp)) {
-                        conditionExp.append(conditionTypeEnum.getExpression());
-                    }
-
-                    conditionExp.append("(").append(childCondition).append(")");
-                }
+                part.setExpression(childCondition.toString());
+                parts.add(part);
             }
         }
 
-        return conditionExp.toString();
+        return parts;
     }
 
     /**

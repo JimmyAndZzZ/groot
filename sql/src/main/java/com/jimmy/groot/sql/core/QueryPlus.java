@@ -10,8 +10,6 @@ import java.util.*;
 @Data
 public class QueryPlus implements Serializable {
 
-    private List<Condition> conditions = new ArrayList<>();
-
     private List<ConditionGroup> conditionGroups = new ArrayList<>();
 
     private List<Order> orders = new ArrayList<>();
@@ -36,11 +34,6 @@ public class QueryPlus implements Serializable {
 
     QueryPlus addAggregateFunction(AggregateFunction aggregateFunction) {
         this.aggregateFunctions.add(aggregateFunction);
-        return this;
-    }
-
-    QueryPlus add(Condition condition) {
-        conditions.add(condition);
         return this;
     }
 

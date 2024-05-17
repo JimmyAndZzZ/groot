@@ -291,10 +291,10 @@ public class IntObjectHashMap<V> implements IntObjectMap<V> {
     }
 
     /**
-     * Locates the index for the given key. This method probes using double hashing.
+     * Locates the Index for the given key. This method probes using double hashing.
      *
      * @param key the key for an entry in the map.
-     * @return the index where the key was found, or {@code -1} if no entry is found for that key.
+     * @return the Index where the key was found, or {@code -1} if no entry is found for that key.
      */
     private int indexOf(int key) {
         int startIndex = hashIndex(key);
@@ -317,7 +317,7 @@ public class IntObjectHashMap<V> implements IntObjectMap<V> {
     }
 
     /**
-     * Returns the hashed index for the given key.
+     * Returns the hashed Index for the given key.
      */
     private int hashIndex(int key) {
         // The array lengths are always a power of two, so we can use a bitmask to stay inside the array bounds.
@@ -332,7 +332,7 @@ public class IntObjectHashMap<V> implements IntObjectMap<V> {
     }
 
     /**
-     * Get the next sequential index after {@code index} and wraps if necessary.
+     * Get the next sequential Index after {@code Index} and wraps if necessary.
      */
     private int probeNext(int index) {
         // The array lengths are always a power of two, so we can use a bitmask to stay inside the array bounds.
@@ -356,10 +356,10 @@ public class IntObjectHashMap<V> implements IntObjectMap<V> {
     }
 
     /**
-     * Removes entry at the given index position. Also performs opportunistic, incremental rehashing
+     * Removes entry at the given Index position. Also performs opportunistic, incremental rehashing
      * if necessary to not break conflict chains.
      *
-     * @param index the index position of the element to remove.
+     * @param index the Index position of the element to remove.
      * @return {@code true} if the next item was moved back. {@code false} otherwise.
      */
     private boolean removeAt(final int index) {
@@ -369,7 +369,7 @@ public class IntObjectHashMap<V> implements IntObjectMap<V> {
         keys[index] = 0;
         values[index] = null;
 
-        // In the interval from index to the next available entry, the arrays may have entries
+        // In the interval from Index to the next available entry, the arrays may have entries
         // that are displaced from their base position due to prior conflicts. Iterate these
         // entries and move them back if possible, optimizing future lookups.
         // Knuth Section 6.4 Algorithm R, also used by the JDK's IdentityHashMap.
@@ -574,7 +574,7 @@ public class IntObjectHashMap<V> implements IntObjectMap<V> {
             prevIndex = nextIndex;
             scanNext();
 
-            // Always return the same Entry object, just change its index each time.
+            // Always return the same Entry object, just change its Index each time.
             entryIndex = prevIndex;
             return this;
         }

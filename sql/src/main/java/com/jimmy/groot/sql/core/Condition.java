@@ -19,8 +19,6 @@ public class Condition implements Serializable {
 
     private Object end;
 
-    private ConditionTypeEnum conditionTypeEnum = ConditionTypeEnum.AND;
-
     public Condition() {
 
     }
