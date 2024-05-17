@@ -7,7 +7,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum IndexTypeEnum {
 
-    PRIMARY_KEY
+    PRIMARY_KEY, NORMAL
 }
 
 

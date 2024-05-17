@@ -17,24 +17,42 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-public class PrimaryKey implements Index {
+public class PrimaryKey extends BaseIndex {
+
+    @Getter
+    private final Set<String> columns;
 
     private final SegmentSerializer segmentSerializer;
 
-    @Getter
-    private final Set<String> columns = Sets.newHashSet();
-
     private final Map<String, Fragment> fragments = Maps.newHashMap();
 
-    public PrimaryKey(SegmentSerializer segmentSerializer) {
+    public PrimaryKey(SegmentSerializer segmentSerializer, Set<String> columns) {
+        this.columns = columns;
         this.segmentSerializer = segmentSerializer;
     }
 
-    public void remove(Map<String, Object> doc) {
-        Unique unique = this.getUnique(doc);
-        fragments.remove(unique.getCode());
+    @Override
+    public Map<String, Object> getKey(String code) {
+        Fragment fragment = fragments.get(code);
+        return fragment != null ? fragment.getKey() : null;
     }
 
+    @Override
+    public Map<String, Object> getValue(String code) {
+        Fragment fragment = fragments.get(code);
+        return fragment != null ? segmentSerializer.deserialize(SegmentPool.getInstance().get(fragment.getIndex())) : null;
+    }
+
+    @Override
+    public void remove(Map<String, Object> doc) {
+        Unique unique = this.getUnique(doc);
+        Fragment remove = fragments.remove(unique.getCode());
+        if (remove != null) {
+            SegmentPool.getInstance().free(remove.getIndex());
+        }
+    }
+
+    @Override
     public void save(Map<String, Object> doc) {
         Unique unique = this.getUnique(doc);
 
@@ -44,25 +62,13 @@ public class PrimaryKey implements Index {
         this.fragments.put(unique.getCode(), fragment);
     }
 
-    protected Unique getUnique(Map<String, Object> doc) {
-        Map<String, Object> uniqueData = Maps.newHashMap();
-
-        for (String uniqueKey : this.getColumns()) {
-            Object o = doc.get(uniqueKey);
-            if (o == null) {
-                throw new EngineException("主键为空,主键名:" + uniqueKey);
-            }
-
-            uniqueData.put(uniqueKey, o);
-        }
-
-        Unique unique = new Unique();
-        unique.setUniqueData(uniqueData);
-        unique.setCode(this.getCode(uniqueData));
-        return unique;
+    @Override
+    public Unique getUnique(Map<String, Object> doc) {
+        return super.getUnique(doc, this.columns);
     }
 
-    protected String getCode(Map<String, Object> data) {
+    @Override
+    public String getCode(Map<String, Object> data) {
         if (MapUtil.isEmpty(data)) {
             return null;
         }
