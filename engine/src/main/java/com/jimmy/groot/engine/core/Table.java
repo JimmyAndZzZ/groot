@@ -3,6 +3,8 @@ package com.jimmy.groot.engine.core;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.google.common.collect.Lists;
+import com.jimmy.groot.engine.base.Index;
+import com.jimmy.groot.engine.core.index.PrimaryKey;
 import com.jimmy.groot.engine.exception.EngineException;
 import com.jimmy.groot.sql.core.Condition;
 import com.jimmy.groot.sql.core.ConditionGroup;
@@ -23,6 +25,10 @@ public class Table implements Serializable {
     private String schema;
 
     private String tableName;
+
+    private PrimaryKey primaryKey;
+
+    private List<Index> indices = Lists.newArrayList();
 
     /**
      * 获取表达式
