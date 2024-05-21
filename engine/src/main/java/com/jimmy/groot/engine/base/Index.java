@@ -1,6 +1,6 @@
 package com.jimmy.groot.engine.base;
 
-import com.jimmy.groot.engine.core.Unique;
+import com.jimmy.groot.engine.core.index.Unique;
 import com.jimmy.groot.sql.enums.IndexTypeEnum;
 
 import java.io.Serializable;

@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.core;
+package com.jimmy.groot.engine.core.index;
 
 import com.google.common.collect.Maps;
 import lombok.Data;

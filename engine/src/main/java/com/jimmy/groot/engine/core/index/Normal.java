@@ -1,7 +1,6 @@
 package com.jimmy.groot.engine.core.index;
 
 import com.google.common.collect.Maps;
-import com.jimmy.groot.engine.core.Unique;
 import com.jimmy.groot.sql.enums.IndexTypeEnum;
 import lombok.Data;
 import lombok.Getter;

@@ -2,7 +2,6 @@ package com.jimmy.groot.engine.core.index;
 
 import com.google.common.collect.Maps;
 import com.jimmy.groot.engine.base.Index;
-import com.jimmy.groot.engine.core.Unique;
 import com.jimmy.groot.engine.exception.EngineException;
 
 import java.util.Map;

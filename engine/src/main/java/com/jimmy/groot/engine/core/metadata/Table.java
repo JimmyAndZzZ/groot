@@ -1,9 +1,10 @@
-package com.jimmy.groot.engine.core;
+package com.jimmy.groot.engine.core.metadata;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.google.common.collect.Lists;
 import com.jimmy.groot.engine.base.Index;
+import com.jimmy.groot.engine.core.other.ConditionPart;
 import com.jimmy.groot.engine.core.index.PrimaryKey;
 import com.jimmy.groot.engine.exception.EngineException;
 import com.jimmy.groot.sql.core.Condition;
@@ -28,7 +29,12 @@ public class Table implements Serializable {
 
     private PrimaryKey primaryKey;
 
+    private List<Column> columns = Lists.newArrayList();
+
     private List<Index> indices = Lists.newArrayList();
+
+
+    
 
     /**
      * 获取表达式
