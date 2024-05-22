@@ -1,21 +1,32 @@
 package com.jimmy.groot.engine.store;
 
-import org.springframework.util.Assert;
+import com.jimmy.groot.engine.other.Assert;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Segment {
-
-    private final AtomicBoolean free;
+public class HeapMemorySegment extends BaseSegment {
 
     private final ByteBuffer byteBuffer;
 
-    Segment(int capacity) {
-        this.free = new AtomicBoolean(true);
+    private final AtomicBoolean free = new AtomicBoolean(true);
+
+    HeapMemorySegment(int capacity, int index) {
+        super(index);
         this.byteBuffer = ByteBuffer.allocate(capacity);
     }
 
+    @Override
+    public boolean isFree() {
+        return free.get();
+    }
+
+    @Override
+    public boolean isNeedRecycle() {
+        return true;
+    }
+
+    @Override
     public boolean write(byte[] bytes) {
         if (!free.compareAndSet(true, false)) {
             return false;
@@ -25,6 +36,7 @@ public class Segment {
         return true;
     }
 
+    @Override
     public byte[] read() {
         Assert.isTrue(!free.get(), "该内存块空闲");
 
@@ -40,10 +52,7 @@ public class Segment {
         return bytes;
     }
 
-    public boolean isFree() {
-        return free.get();
-    }
-
+    @Override
     public void free() {
         Assert.isTrue(free.compareAndSet(false, true), "该内存块空闲");
         byteBuffer.clear();

@@ -9,6 +9,8 @@ import com.jimmy.groot.engine.core.index.PrimaryKey;
 import com.jimmy.groot.engine.exception.EngineException;
 import com.jimmy.groot.sql.core.Condition;
 import com.jimmy.groot.sql.core.ConditionGroup;
+import com.jimmy.groot.sql.core.QueryPlus;
+import com.jimmy.groot.sql.core.Wrapper;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
 
@@ -27,14 +29,19 @@ public class Table implements Serializable {
 
     private String tableName;
 
-    private PrimaryKey primaryKey;
-
     private List<Column> columns = Lists.newArrayList();
 
     private List<Index> indices = Lists.newArrayList();
 
+    public List<Map<String,Object>> queryList(Wrapper wrapper){
+        QueryPlus queryPlus = wrapper.getQueryPlus();
 
-    
+
+
+
+    }
+
+
 
     /**
      * 获取表达式
