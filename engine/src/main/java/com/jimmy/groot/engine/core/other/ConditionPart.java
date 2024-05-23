@@ -11,9 +11,11 @@ import java.util.Set;
 @Data
 public class ConditionPart implements Serializable {
 
-    private String expression;
+    private String fullExpression;
 
-    private Set<String> mayNeedIndexFields = Sets.newHashSet();
+    private String uniqueExpression;
+
+    private String partitionExpression;
 
     private Map<String, Object> conditionArgument = Maps.newHashMap();
 }

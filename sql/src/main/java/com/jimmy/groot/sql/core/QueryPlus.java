@@ -24,10 +24,9 @@ public class QueryPlus implements Serializable {
 
     }
 
-    QueryPlus addGroup(ConditionTypeEnum conditionTypeEnum, List<Condition> conditions) {
+    QueryPlus addGroup(List<Condition> conditions) {
         ConditionGroup conditionGroup = new ConditionGroup();
         conditionGroup.setConditions(conditions);
-        conditionGroup.setConditionTypeEnum(conditionTypeEnum);
         conditionGroups.add(conditionGroup);
         return this;
     }
