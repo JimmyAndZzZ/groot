@@ -17,5 +17,9 @@ public class ConditionPart implements Serializable {
 
     private String partitionExpression;
 
+    private Set<String> uniqueCodes = Sets.newHashSet();
+
+    private Set<String> partitionCodes = Sets.newHashSet();
+
     private Map<String, Object> conditionArgument = Maps.newHashMap();
 }
