@@ -13,4 +13,6 @@ public interface Segment {
     boolean isNeedRecycle();
 
     int getIndex();
+
+    void release();
 }

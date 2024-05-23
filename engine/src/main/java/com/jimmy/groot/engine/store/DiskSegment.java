@@ -77,4 +77,9 @@ public class DiskSegment extends BaseSegment {
     public boolean isNeedRecycle() {
         return false;
     }
+
+    @Override
+    public void release() {
+
+    }
 }

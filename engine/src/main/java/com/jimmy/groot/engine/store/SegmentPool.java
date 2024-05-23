@@ -1,11 +1,14 @@
 package com.jimmy.groot.engine.store;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.thread.ThreadUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 import com.jimmy.groot.engine.base.Segment;
 import com.jimmy.groot.engine.exception.EngineException;
+import com.jimmy.groot.engine.other.Assert;
 import com.jimmy.groot.engine.other.IntObjectHashMap;
+import lombok.extern.slf4j.Slf4j;
 import org.xerial.snappy.Snappy;
 
 import java.util.Collection;
@@ -13,15 +16,40 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 public class SegmentPool {
 
     private final static int DEFAULT_CAPACITY = 32;
 
     private final AtomicInteger counter = new AtomicInteger(0);
 
-    private final Queue<Segment> wait = Queues.newConcurrentLinkedQueue();
+    private final SegmentQueue wait = new SegmentQueue();
 
     private final IntObjectHashMap<Segment> pool = new IntObjectHashMap<>(216);
+
+    private static class SingletonHolder {
+        private static final SegmentPool INSTANCE = new SegmentPool();
+    }
+
+    public static SegmentPool getInstance() {
+        return SingletonHolder.INSTANCE;
+    }
+
+    private SegmentPool() {
+        new Thread(() -> {
+            while (true) {
+                if (wait.getLastPollTimestamp() < System.currentTimeMillis() - 60 * 1000) {
+                    Segment poll = wait.poll();
+                    if (poll != null && poll.isFree()) {
+                        poll.release();
+                        poll = null;
+                    }
+                }
+
+                ThreadUtil.sleep(1000);
+            }
+        }).start();
+    }
 
     public List<Integer> allocateFromMemory(byte[] bytes) {
         try {
@@ -51,26 +79,12 @@ public class SegmentPool {
         }
     }
 
-    public List<Integer> allocateFromDisk(byte[] bytes) {
-        try {
-            bytes = Snappy.compress(bytes);
-            //压缩
-            List<Integer> indexes = Lists.newArrayList();
-            //切割
-            List<byte[]> spilt = this.splitByteArray(bytes);
+    public Integer allocateFromDisk(byte[] bytes) {
+        Segment disk = new DiskSegment(counter.incrementAndGet());
+        disk.write(bytes);
 
-            for (byte[] b : spilt) {
-                Segment memory = new DiskSegment(counter.incrementAndGet());
-                memory.write(b);
-
-                pool.put(memory.getIndex(), memory);
-                indexes.add(memory.getIndex());
-            }
-
-            return indexes;
-        } catch (Exception e) {
-            throw new EngineException(e.getMessage());
-        }
+        pool.put(disk.getIndex(), disk);
+        return disk.getIndex();
     }
 
     public byte[] getAndFree(List<Integer> indices) {
@@ -87,9 +101,8 @@ public class SegmentPool {
 
             Integer first = indices.get(0);
             byte[] bytes = this.get(first);
-            if (bytes == null) {
-                throw new EngineException("数组为空");
-            }
+
+            Assert.notNull(bytes, "数组为空");
 
             if (indices.size() == 1) {
                 return Snappy.uncompress(bytes);
@@ -97,9 +110,7 @@ public class SegmentPool {
 
             for (int i = 1; i < indices.size(); i++) {
                 byte[] other = this.get(indices.get(i));
-                if (other == null) {
-                    throw new EngineException("数组为空");
-                }
+                Assert.notNull(other, "数组为空");
 
                 bytes = this.mergeByteArray(bytes, other);
             }
@@ -131,13 +142,7 @@ public class SegmentPool {
         }
     }
 
-    /**
-     * 根据下标获取数据
-     *
-     * @param index
-     * @return
-     */
-    private byte[] get(Integer index) {
+    public byte[] get(Integer index) {
         return pool.get(index).read();
     }
 

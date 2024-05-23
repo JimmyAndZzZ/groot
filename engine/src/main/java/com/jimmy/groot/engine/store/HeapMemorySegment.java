@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class HeapMemorySegment extends BaseSegment {
 
-    private final ByteBuffer byteBuffer;
+    private ByteBuffer byteBuffer;
 
     private final AtomicBoolean free = new AtomicBoolean(true);
 
@@ -24,6 +24,11 @@ public class HeapMemorySegment extends BaseSegment {
     @Override
     public boolean isNeedRecycle() {
         return true;
+    }
+
+    @Override
+    public void release() {
+        byteBuffer = null;
     }
 
     @Override

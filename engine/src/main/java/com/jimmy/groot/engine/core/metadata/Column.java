@@ -11,4 +11,8 @@ public class Column implements Serializable {
     private String name;
 
     private ColumnTypeEnum columnType;
+
+    private Boolean isUniqueKey = false;
+
+    private Boolean isPartitionKey = false;
 }
