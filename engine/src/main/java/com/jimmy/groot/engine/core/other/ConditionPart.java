@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.core;
+package com.jimmy.groot.engine.core.other;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -11,9 +11,11 @@ import java.util.Set;
 @Data
 public class ConditionPart implements Serializable {
 
-    private String expression;
+    private String fullExpression;
 
-    private Set<String> mayNeedIndexFields = Sets.newHashSet();
+    private String uniqueExpression;
+
+    private String partitionExpression;
 
     private Map<String, Object> conditionArgument = Maps.newHashMap();
 }

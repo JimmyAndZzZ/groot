@@ -1,6 +1,7 @@
-package com.jimmy.groot.engine.core;
+package com.jimmy.groot.engine.core.metadata;
 
 import com.google.common.collect.Maps;
+import com.jimmy.groot.engine.core.metadata.Schema;
 import lombok.Data;
 
 import java.io.Serializable;

@@ -6,7 +6,7 @@ import com.esotericsoftware.kryo.kryo5.io.Output;
 import com.esotericsoftware.kryo.kryo5.objenesis.strategy.StdInstantiatorStrategy;
 import com.esotericsoftware.kryo.kryo5.serializers.MapSerializer;
 import com.google.common.collect.Maps;
-import com.jimmy.groot.sql.exception.EngineException;
+import com.jimmy.groot.engine.exception.EngineException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
