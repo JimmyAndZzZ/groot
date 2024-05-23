@@ -2,6 +2,7 @@ package com.jimmy.groot.engine.core.metadata;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.google.common.collect.Lists;
@@ -16,10 +17,9 @@ import com.jimmy.groot.engine.enums.ColumnTypeEnum;
 import com.jimmy.groot.engine.exception.EngineException;
 import com.jimmy.groot.engine.other.Assert;
 import com.jimmy.groot.engine.other.Constant;
+import com.jimmy.groot.engine.other.MapComparator;
 import com.jimmy.groot.engine.store.SegmentSerializer;
-import com.jimmy.groot.sql.core.Condition;
-import com.jimmy.groot.sql.core.ConditionGroup;
-import com.jimmy.groot.sql.core.QueryPlus;
+import com.jimmy.groot.sql.core.*;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
 import lombok.Data;
@@ -143,6 +143,132 @@ public class Table implements Serializable {
         if (partition != null) {
             partition.remove(this.getKey(uniqueData));
         }
+    }
+
+    public Collection<Map<String, Object>> page(QueryPlus queryPlus, Integer pageNo, Integer pageSize) {
+        return this.aggregateHandler(queryPlus, this.queryByCondition(queryPlus, pageNo * pageSize, pageNo * pageSize + pageSize));
+    }
+
+    public Collection<Map<String, Object>> list(QueryPlus queryPlus) {
+        return this.aggregateHandler(queryPlus, this.queryByCondition(queryPlus, -1, -1));
+    }
+
+    /**
+     * 聚合函数处理
+     *
+     * @param result
+     * @return
+     */
+    private Collection<Map<String, Object>> aggregateHandler(QueryPlus queryPlus, Collection<Map<String, Object>> result) {
+        Set<String> select = queryPlus.getSelect();
+        List<String> groupBy = queryPlus.getGroupBy();
+        List<AggregateFunction> aggregateFunctions = queryPlus.getAggregateFunctions();
+
+        if (CollUtil.isEmpty(result)) {
+            return result;
+        }
+
+        if (CollUtil.isEmpty(groupBy) && CollUtil.isEmpty(aggregateFunctions)) {
+            return result;
+        }
+
+        if (CollUtil.isEmpty(groupBy) && CollUtil.isNotEmpty(aggregateFunctions)) {
+            Map<String, Object> doc = Maps.newHashMap();
+
+            for (AggregateFunction aggregateFunction : aggregateFunctions) {
+                doc.put(aggregateFunction.getAlias(), this.aggregateCalculate(result, aggregateFunction.getAggregateType(), aggregateFunction.getColumn()));
+            }
+
+            if (CollUtil.isEmpty(select)) {
+                return Lists.newArrayList(doc);
+            }
+
+            return result.stream().map(map -> {
+                Map<String, Object> data = Maps.newHashMap(doc);
+                for (String s : select) {
+                    data.put(s, map.get(s));
+                }
+
+                return data;
+            }).collect(Collectors.toList());
+        }
+        //groupby
+        Map<String, List<Map<String, Object>>> groupby = result.stream().collect(Collectors.groupingBy(m -> this.getKey(m, groupBy)));
+
+        List<Map<String, Object>> list = Lists.newArrayList();
+
+        for (Map.Entry<String, List<Map<String, Object>>> entry : groupby.entrySet()) {
+            List<Map<String, Object>> mapValue = entry.getValue();
+
+            Map<String, Object> map = mapValue.stream().findFirst().get();
+            Map<String, Object> data = Maps.newHashMap();
+
+            for (String s : groupBy) {
+                data.put(s, map.get(s));
+            }
+
+            for (AggregateFunction aggregateFunction : aggregateFunctions) {
+                data.put(aggregateFunction.getAlias(), this.aggregateCalculate(mapValue, aggregateFunction.getAggregateType(), aggregateFunction.getColumn()));
+            }
+
+            list.add(data);
+        }
+
+        return list;
+    }
+
+    /**
+     * 获取聚合计算结果
+     *
+     * @param result
+     * @param aggregateEnum
+     * @param name
+     * @return
+     */
+    private Object aggregateCalculate(Collection<Map<String, Object>> result, AggregateEnum aggregateEnum, String name) {
+        switch (aggregateEnum) {
+            case COUNT:
+                return result.size();
+            case MAX:
+                return result.stream()
+                        .filter(map -> map.get(name) != null)
+                        .max(new MapComparator(name)).get().get(name);
+            case MIN:
+                return result.stream()
+                        .filter(map -> map.get(name) != null)
+                        .min(new MapComparator(name)).get().get(name);
+            case AVG:
+                return result.stream()
+                        .filter(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name)) != null)
+                        .mapToDouble(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name))).average().orElse(0D);
+            case SUM:
+                return result.stream()
+                        .filter(map -> map.get(name) != null)
+                        .mapToDouble(map -> NumberUtil.parseDouble(map.get(name) != null ? map.get(name).toString() : StrUtil.EMPTY)).sum();
+        }
+
+        return null;
+    }
+
+    /**
+     * 获取groupby key
+     *
+     * @return
+     */
+    private String getGroupKey(Map<String, Object> map, List<String> groupBy) {
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < groupBy.size(); i++) {
+            if (i > 0) {
+                sb.append(":");
+            }
+
+            String s = groupBy.get(i);
+            Object o = map.get(s);
+            sb.append(o != null ? o.toString() : "NULL");
+        }
+
+        return sb.toString();
     }
 
     /**
