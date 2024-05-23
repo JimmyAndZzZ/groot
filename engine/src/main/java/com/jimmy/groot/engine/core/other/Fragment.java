@@ -15,6 +15,9 @@ import java.util.Map;
 
 public class Fragment implements Serializable {
 
+    @Getter
+    private String code;
+
     private Integer diskIndex;
 
     private SegmentSerializer segmentSerializer;
@@ -28,9 +31,10 @@ public class Fragment implements Serializable {
 
     }
 
-    public static Fragment build(SegmentSerializer segmentSerializer, Map<String, Object> key) {
+    public static Fragment build(String code, SegmentSerializer segmentSerializer, Map<String, Object> key) {
         Fragment fragment = new Fragment();
         fragment.key = key;
+        fragment.code = code;
         fragment.segmentSerializer = segmentSerializer;
         return fragment;
     }
