@@ -19,12 +19,6 @@ public class NettyDecoder extends ByteToMessageDecoder {
         this.genericClass = genericClass;
     }
 
-    /**
-     * @param channelHandlerContext 解码器关联的 ChannelHandlerContext 对象
-     * @param byteBuf               "入站"数据，也就是 ByteBuf 对象
-     * @param list                  解码之后的数据对象需要添加到 out 对象里面
-     * @throws Exception
-     */
     @Override
     protected void decode(ChannelHandlerContext channelHandlerContext, ByteBuf byteBuf, List<Object> list) throws Exception {
         //因为消息长度所占字节为4，则得到的入站数据必须要大于4

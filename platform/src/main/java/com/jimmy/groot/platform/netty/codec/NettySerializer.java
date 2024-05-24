@@ -12,11 +12,6 @@ import java.io.IOException;
 @Slf4j
 public class NettySerializer {
 
-    /**
-     * 由于kryo不是线程安全的，则每个线程都应该有自己的kryo，Input或Output实例
-     * 所以，使用ThreadLocal存放Kryo对象
-     * 这样九九减少了每次使用都实例化一次Kryo的开销，又能保证线程安全
-     */
     public static final ThreadLocal<Kryo> KryoThreadLocal = ThreadLocal.withInitial(() -> {
         Kryo kryo = new Kryo();
         kryo.setReferences(true);
