@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.other;
+package com.jimmy.groot.platform.other;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;

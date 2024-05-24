@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.other;
+package com.jimmy.groot.sql.other;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.NumberUtil;

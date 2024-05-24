@@ -3,9 +3,8 @@ package com.jimmy.groot.engine.store;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
-import com.jimmy.groot.engine.base.Segment;
 import com.jimmy.groot.engine.exception.EngineException;
-import com.jimmy.groot.engine.other.Assert;
+import com.jimmy.groot.platform.other.Assert;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.RandomAccessFile;

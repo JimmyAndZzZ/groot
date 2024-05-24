@@ -3,17 +3,15 @@ package com.jimmy.groot.engine.store;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.thread.ThreadUtil;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Queues;
 import com.jimmy.groot.engine.base.Segment;
 import com.jimmy.groot.engine.exception.EngineException;
-import com.jimmy.groot.engine.other.Assert;
-import com.jimmy.groot.engine.other.IntObjectHashMap;
+import com.jimmy.groot.platform.other.Assert;
+import com.jimmy.groot.platform.other.IntObjectHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.xerial.snappy.Snappy;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j

@@ -1,7 +1,7 @@
-package com.jimmy.groot.engine.other;
+package com.jimmy.groot.platform.other;
 
 
-import com.jimmy.groot.engine.base.IntObjectMap;
+import com.jimmy.groot.platform.base.IntObjectMap;
 
 import java.util.*;
 

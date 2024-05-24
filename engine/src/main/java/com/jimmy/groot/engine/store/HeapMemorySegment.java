@@ -1,6 +1,6 @@
 package com.jimmy.groot.engine.store;
 
-import com.jimmy.groot.engine.other.Assert;
+import com.jimmy.groot.platform.other.Assert;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;

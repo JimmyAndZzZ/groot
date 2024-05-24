@@ -19,12 +19,13 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.googlecode.aviator</groupId>
-            <artifactId>aviator</artifactId>
+            <groupId>com.jimmy.groot</groupId>
+            <artifactId>platform</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
-            <groupId>com.esotericsoftware.kryo</groupId>
-            <artifactId>kryo5</artifactId>
+            <groupId>com.googlecode.aviator</groupId>
+            <artifactId>aviator</artifactId>
         </dependency>
         <dependency>
             <groupId>org.xerial.snappy</groupId>

@@ -15,24 +15,22 @@ import com.jimmy.groot.engine.core.other.ConditionPart;
 import com.jimmy.groot.engine.core.other.Fragment;
 import com.jimmy.groot.engine.enums.ColumnTypeEnum;
 import com.jimmy.groot.engine.exception.EngineException;
-import com.jimmy.groot.engine.other.Assert;
-import com.jimmy.groot.engine.other.Constant;
-import com.jimmy.groot.engine.other.MapComparator;
 import com.jimmy.groot.engine.store.SegmentSerializer;
+import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.core.*;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
+import com.jimmy.groot.sql.other.MapComparator;
 import lombok.Data;
 import lombok.Getter;
 
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static com.jimmy.groot.engine.other.Constant.SOURCE_PARAM_KEY;
-import static com.jimmy.groot.engine.other.Constant.TARGET_PARAM_KEY;
+import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
+import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
 public class Table implements Serializable {
 
@@ -193,7 +191,7 @@ public class Table implements Serializable {
             }).collect(Collectors.toList());
         }
         //groupby
-        Map<String, List<Map<String, Object>>> groupby = result.stream().collect(Collectors.groupingBy(m -> this.getKey(m, groupBy)));
+        Map<String, List<Map<String, Object>>> groupby = result.stream().collect(Collectors.groupingBy(m -> this.getGroupKey(m, groupBy)));
 
         List<Map<String, Object>> list = Lists.newArrayList();
 
@@ -371,8 +369,8 @@ public class Table implements Serializable {
 
                         for (Fragment fragment : fragments) {
                             Map<String, Object> param = Maps.newHashMap();
-                            param.put(Constant.SOURCE_PARAM_KEY, fragment.getKey());
-                            param.put(Constant.TARGET_PARAM_KEY, conditionArgument);
+                            param.put(SOURCE_PARAM_KEY, fragment.getKey());
+                            param.put(TARGET_PARAM_KEY, conditionArgument);
                             Boolean flag = cn.hutool.core.convert.Convert.toBool(tempUniqueExpression.execute(param), false);
 
                             if (flag) {
@@ -419,8 +417,8 @@ public class Table implements Serializable {
                         Set<String> processUniqueCodes,
                         int start) {
         Map<String, Object> param = Maps.newHashMap();
-        param.put(Constant.SOURCE_PARAM_KEY, d);
-        param.put(Constant.TARGET_PARAM_KEY, conditionArgument);
+        param.put(SOURCE_PARAM_KEY, d);
+        param.put(TARGET_PARAM_KEY, conditionArgument);
         Boolean flag = cn.hutool.core.convert.Convert.toBool(expression.execute(param), false);
         if (flag && isFindAll) {
             data.put(uniqueCode, d);
@@ -506,8 +504,8 @@ public class Table implements Serializable {
                     Expression expression = AviatorEvaluator.compile(partitionExpression);
 
                     Map<String, Object> param = Maps.newHashMap();
-                    param.put(Constant.SOURCE_PARAM_KEY, value.getKey());
-                    param.put(Constant.TARGET_PARAM_KEY, conditionArgument);
+                    param.put(SOURCE_PARAM_KEY, value.getKey());
+                    param.put(TARGET_PARAM_KEY, conditionArgument);
                     Boolean flag = cn.hutool.core.convert.Convert.toBool(expression.execute(param), false);
                     if (flag) {
                         route.getPartitions().add(value);

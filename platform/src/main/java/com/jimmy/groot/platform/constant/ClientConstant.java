@@ -1,6 +1,6 @@
-package com.jimmy.groot.engine.other;
+package com.jimmy.groot.platform.constant;
 
-public interface Constant {
+public interface ClientConstant {
 
     String SOURCE_PARAM_KEY = "source";
 
