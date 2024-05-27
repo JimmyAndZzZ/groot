@@ -6,7 +6,7 @@ import lombok.Getter;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class HeapMemorySegment {
+public class MemorySegment {
 
     private ByteBuffer byteBuffer;
 
@@ -15,7 +15,7 @@ public class HeapMemorySegment {
 
     private final AtomicBoolean free = new AtomicBoolean(true);
 
-    HeapMemorySegment(int capacity, int index) {
+    MemorySegment(int capacity, int index) {
         this.index = index;
         this.byteBuffer = ByteBuffer.allocate(capacity);
     }

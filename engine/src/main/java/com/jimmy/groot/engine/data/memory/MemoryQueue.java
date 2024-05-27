@@ -5,12 +5,12 @@ import lombok.Getter;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Getter
-public class SegmentQueue extends ConcurrentLinkedQueue<HeapMemorySegment> {
+public class MemoryQueue extends ConcurrentLinkedQueue<MemorySegment> {
 
     private long lastPollTimestamp;
 
     @Override
-    public HeapMemorySegment poll() {
+    public MemorySegment poll() {
         this.lastPollTimestamp = System.currentTimeMillis();
         return super.poll();
     }

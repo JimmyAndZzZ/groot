@@ -1,13 +1,12 @@
-package com.jimmy.groot.engine.metadata;
+package com.jimmy.groot.engine.data.memory;
 
 import com.google.common.collect.Maps;
-import com.jimmy.groot.engine.data.memory.Fragment;
 import lombok.Getter;
 
 import java.util.Collection;
 import java.util.Map;
 
-public class Partition {
+public class MemoryPartition {
 
     @Getter
     private String code;
@@ -15,9 +14,9 @@ public class Partition {
     @Getter
     private Map<String, Object> key;
 
-    private Map<String, Fragment> partitions = Maps.newConcurrentMap();
+    private Map<String, MemoryFragment> partitions = Maps.newConcurrentMap();
 
-    public Partition(String code, Map<String, Object> key) {
+    public MemoryPartition(String code, Map<String, Object> key) {
         this.code = code;
         this.key = key;
     }
@@ -26,16 +25,16 @@ public class Partition {
         return partitions.size();
     }
 
-    public Fragment getFragmentByUniqueCode(String uniqueCode) {
+    public MemoryFragment getFragmentByUniqueCode(String uniqueCode) {
         return this.partitions.get(uniqueCode);
     }
 
-    public Collection<Fragment> getFragments() {
+    public Collection<MemoryFragment> getFragments() {
         return partitions.values();
     }
 
-    public void save(String code, Fragment fragment) {
-        partitions.put(code, fragment);
+    public void save(String code, MemoryFragment memoryFragment) {
+        partitions.put(code, memoryFragment);
     }
 
     public void remove(String code) {

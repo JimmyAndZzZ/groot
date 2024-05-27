@@ -11,11 +11,11 @@ import com.google.common.collect.Sets;
 import com.googlecode.aviator.AviatorEvaluator;
 import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
-import com.jimmy.groot.engine.data.memory.Fragment;
+import com.jimmy.groot.engine.data.memory.MemoryFragment;
 import com.jimmy.groot.engine.data.other.ConditionPart;
 import com.jimmy.groot.engine.exception.EngineException;
 import com.jimmy.groot.engine.metadata.Column;
-import com.jimmy.groot.engine.metadata.Partition;
+import com.jimmy.groot.engine.data.memory.MemoryPartition;
 import com.jimmy.groot.platform.base.Serializer;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.core.*;
@@ -36,7 +36,7 @@ public class MemoryData extends AbstractData {
 
     private Serializer serializer;
 
-    private ConcurrentMap<String, Partition> partitions;
+    private ConcurrentMap<String, MemoryPartition> partitions;
 
     private MemoryData(List<Column> columns) {
         super(columns);
@@ -45,6 +45,7 @@ public class MemoryData extends AbstractData {
     public static MemoryData build(Serializer serializer, List<Column> columns) {
         MemoryData table = new MemoryData(columns);
         table.serializer = serializer;
+        table.partitions = Maps.newConcurrentMap();
         return table;
     }
 
@@ -75,8 +76,8 @@ public class MemoryData extends AbstractData {
         String uniqueKey = this.getKey(uniqueData);
         String partitionKey = this.getKey(partitionData);
 
-        partitions.computeIfAbsent(partitionKey, s -> new Partition(partitionKey, partitionData));
-        partitions.get(partitionKey).save(uniqueKey, Fragment.build(uniqueKey, serializer, uniqueData).writeMemory(memoryData));
+        partitions.computeIfAbsent(partitionKey, s -> new MemoryPartition(partitionKey, partitionData));
+        partitions.get(partitionKey).save(uniqueKey, MemoryFragment.build(uniqueKey, serializer, uniqueData).writeMemory(memoryData));
     }
 
     @Override
@@ -100,9 +101,9 @@ public class MemoryData extends AbstractData {
             }
         }
 
-        Partition partition = partitions.get(this.getKey(partitionData));
-        if (partition != null) {
-            partition.remove(this.getKey(uniqueData));
+        MemoryPartition memoryPartition = partitions.get(this.getKey(partitionData));
+        if (memoryPartition != null) {
+            memoryPartition.remove(this.getKey(uniqueData));
         }
     }
 
@@ -193,21 +194,13 @@ public class MemoryData extends AbstractData {
             case COUNT:
                 return result.size();
             case MAX:
-                return result.stream()
-                        .filter(map -> map.get(name) != null)
-                        .max(new MapComparator(name)).get().get(name);
+                return result.stream().filter(map -> map.get(name) != null).max(new MapComparator(name)).get().get(name);
             case MIN:
-                return result.stream()
-                        .filter(map -> map.get(name) != null)
-                        .min(new MapComparator(name)).get().get(name);
+                return result.stream().filter(map -> map.get(name) != null).min(new MapComparator(name)).get().get(name);
             case AVG:
-                return result.stream()
-                        .filter(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name)) != null)
-                        .mapToDouble(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name))).average().orElse(0D);
+                return result.stream().filter(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name)) != null).mapToDouble(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name))).average().orElse(0D);
             case SUM:
-                return result.stream()
-                        .filter(map -> map.get(name) != null)
-                        .mapToDouble(map -> NumberUtil.parseDouble(map.get(name) != null ? map.get(name).toString() : StrUtil.EMPTY)).sum();
+                return result.stream().filter(map -> map.get(name) != null).mapToDouble(map -> NumberUtil.parseDouble(map.get(name) != null ? map.get(name).toString() : StrUtil.EMPTY)).sum();
         }
 
         return null;
@@ -239,7 +232,7 @@ public class MemoryData extends AbstractData {
      * @return
      */
     private Collection<Map<String, Object>> queryByCondition(QueryPlus queryPlus, int start, int end) {
-        int sum = partitions.values().stream().mapToInt(Partition::count).sum();
+        int sum = partitions.values().stream().mapToInt(MemoryPartition::count).sum();
         if (start >= sum) {
             return Lists.newArrayList();
         }
@@ -260,28 +253,21 @@ public class MemoryData extends AbstractData {
         for (Route route : routes) {
             Boolean isAll = route.getIsAll();
             ConditionPart conditionPart = route.getConditionPart();
-            List<Partition> routePartitions = route.getPartitions();
+            List<MemoryPartition> routeMemoryPartitions = route.getMemoryPartitions();
 
             if (isAll) {
-                for (Partition routePartition : routePartitions) {
-                    if (!processPartitionCodes.add(routePartition.getCode())) {
+                for (MemoryPartition routeMemoryPartition : routeMemoryPartitions) {
+                    if (!processPartitionCodes.add(routeMemoryPartition.getCode())) {
                         continue;
                     }
 
-                    Collection<Fragment> fragments = routePartition.getFragments();
-                    if (CollUtil.isEmpty(fragments)) {
+                    Collection<MemoryFragment> memoryFragments = routeMemoryPartition.getFragments();
+                    if (CollUtil.isEmpty(memoryFragments)) {
                         continue;
                     }
 
-                    for (Fragment fragment : fragments) {
-                        this.filter(fragment.getCode(),
-                                fragment.getData(),
-                                conditionCollect.getConditionArgument(),
-                                expression,
-                                isFindAll,
-                                data,
-                                processUniqueCodes,
-                                start);
+                    for (MemoryFragment memoryFragment : memoryFragments) {
+                        this.filter(memoryFragment.getCode(), memoryFragment.getData(), conditionCollect.getConditionArgument(), expression, isFindAll, data, processUniqueCodes, start);
 
                         if (!isFindAll && processUniqueCodes.size() == end) {
                             return data.values();
@@ -299,23 +285,16 @@ public class MemoryData extends AbstractData {
 
                 Set<String> tempProcessUniqueCodes = Sets.newHashSet();
 
-                for (Partition routePartition : routePartitions) {
-                    if (processPartitionCodes.contains(routePartition.getCode())) {
+                for (MemoryPartition routeMemoryPartition : routeMemoryPartitions) {
+                    if (processPartitionCodes.contains(routeMemoryPartition.getCode())) {
                         continue;
                     }
                     //主键值范围
                     if (CollUtil.isNotEmpty(uniqueCodes)) {
                         for (String uniqueCode : uniqueCodes) {
-                            Fragment fragmentByUniqueCode = routePartition.getFragmentByUniqueCode(uniqueCode);
-                            if (fragmentByUniqueCode != null && tempProcessUniqueCodes.add(uniqueCode)) {
-                                this.filter(uniqueCode,
-                                        fragmentByUniqueCode.getData(),
-                                        conditionArgument,
-                                        tempFullExpression,
-                                        isFindAll,
-                                        data,
-                                        processUniqueCodes,
-                                        start);
+                            MemoryFragment memoryFragmentByUniqueCode = routeMemoryPartition.getFragmentByUniqueCode(uniqueCode);
+                            if (memoryFragmentByUniqueCode != null && tempProcessUniqueCodes.add(uniqueCode)) {
+                                this.filter(uniqueCode, memoryFragmentByUniqueCode.getData(), conditionArgument, tempFullExpression, isFindAll, data, processUniqueCodes, start);
 
                                 if (!isFindAll && processUniqueCodes.size() == end) {
                                     return data.values();
@@ -327,26 +306,19 @@ public class MemoryData extends AbstractData {
                     if (StrUtil.isNotBlank(uniqueExpression)) {
                         Expression tempUniqueExpression = AviatorEvaluator.compile(uniqueExpression);
 
-                        Collection<Fragment> fragments = routePartition.getFragments();
-                        if (CollUtil.isEmpty(fragments)) {
+                        Collection<MemoryFragment> memoryFragments = routeMemoryPartition.getFragments();
+                        if (CollUtil.isEmpty(memoryFragments)) {
                             continue;
                         }
 
-                        for (Fragment fragment : fragments) {
+                        for (MemoryFragment memoryFragment : memoryFragments) {
                             Map<String, Object> param = Maps.newHashMap();
-                            param.put(SOURCE_PARAM_KEY, fragment.getKey());
+                            param.put(SOURCE_PARAM_KEY, memoryFragment.getKey());
                             param.put(TARGET_PARAM_KEY, conditionArgument);
                             Boolean flag = cn.hutool.core.convert.Convert.toBool(tempUniqueExpression.execute(param), false);
 
                             if (flag) {
-                                this.filter(fragment.getCode(),
-                                        fragment.getData(),
-                                        conditionArgument,
-                                        tempFullExpression,
-                                        isFindAll,
-                                        data,
-                                        processUniqueCodes,
-                                        start);
+                                this.filter(memoryFragment.getCode(), memoryFragment.getData(), conditionArgument, tempFullExpression, isFindAll, data, processUniqueCodes, start);
 
                                 if (!isFindAll && processUniqueCodes.size() == end) {
                                     return data.values();
@@ -373,14 +345,7 @@ public class MemoryData extends AbstractData {
      * @param processUniqueCodes
      * @param start
      */
-    private void filter(String uniqueCode,
-                        Map<String, Object> d,
-                        Map<String, Object> conditionArgument,
-                        Expression expression,
-                        Boolean isFindAll,
-                        Map<String, Map<String, Object>> data,
-                        Set<String> processUniqueCodes,
-                        int start) {
+    private void filter(String uniqueCode, Map<String, Object> d, Map<String, Object> conditionArgument, Expression expression, Boolean isFindAll, Map<String, Map<String, Object>> data, Set<String> processUniqueCodes, int start) {
         Map<String, Object> param = Maps.newHashMap();
         param.put(SOURCE_PARAM_KEY, d);
         param.put(TARGET_PARAM_KEY, conditionArgument);
@@ -445,27 +410,27 @@ public class MemoryData extends AbstractData {
 
             if (CollUtil.isEmpty(partitionCodes) && StrUtil.isEmpty(partitionExpression)) {
                 route.setIsAll(true);
-                route.getPartitions().addAll(this.partitions.values());
+                route.getMemoryPartitions().addAll(this.partitions.values());
                 routes.add(route);
                 continue;
             }
 
             if (CollUtil.isNotEmpty(partitionCodes)) {
                 for (String partitionCode : partitionCodes) {
-                    Partition partition = this.partitions.get(partitionCode);
-                    if (partition == null) {
+                    MemoryPartition memoryPartition = this.partitions.get(partitionCode);
+                    if (memoryPartition == null) {
                         route.setIsAll(true);
-                        route.getPartitions().addAll(this.partitions.values());
+                        route.getMemoryPartitions().addAll(this.partitions.values());
                         routes.add(route);
                         break;
                     }
 
-                    route.getPartitions().add(partition);
+                    route.getMemoryPartitions().add(memoryPartition);
                 }
             }
 
             if (StrUtil.isNotBlank(partitionExpression)) {
-                for (Partition value : this.partitions.values()) {
+                for (MemoryPartition value : this.partitions.values()) {
                     Expression expression = AviatorEvaluator.compile(partitionExpression);
 
                     Map<String, Object> param = Maps.newHashMap();
@@ -473,7 +438,7 @@ public class MemoryData extends AbstractData {
                     param.put(TARGET_PARAM_KEY, conditionArgument);
                     Boolean flag = cn.hutool.core.convert.Convert.toBool(expression.execute(param), false);
                     if (flag) {
-                        route.getPartitions().add(value);
+                        route.getMemoryPartitions().add(value);
                     }
                 }
             }
@@ -588,8 +553,7 @@ public class MemoryData extends AbstractData {
     }
 
 
-    private List<Map<String, Object>> generateCombinations
-            (Map<String, Set<Object>> inputMap, Set<String> keysToCombine) {
+    private List<Map<String, Object>> generateCombinations(Map<String, Set<Object>> inputMap, Set<String> keysToCombine) {
 
         List<Map<String, Object>> result = Lists.newArrayList();
         if (MapUtil.isEmpty(inputMap) || CollUtil.isEmpty(keysToCombine)) {
@@ -616,8 +580,7 @@ public class MemoryData extends AbstractData {
      * @param currentCombination
      * @param result
      */
-    private void generateConditionCombinations(Map<String, Set<Object>> inputMap, List<String> keys,
-                                               int index, Map<String, Object> currentCombination, List<Map<String, Object>> result) {
+    private void generateConditionCombinations(Map<String, Set<Object>> inputMap, List<String> keys, int index, Map<String, Object> currentCombination, List<Map<String, Object>> result) {
         if (index == keys.size()) {
             result.add(new HashMap<>(currentCombination));
             return;
@@ -661,12 +624,7 @@ public class MemoryData extends AbstractData {
      * @param i
      * @return
      */
-    private String getExpCondition(Column column,
-                                   Map<String, Set<Object>> keyConditionValue,
-                                   Object fieldValue,
-                                   ConditionEnum conditionEnum,
-                                   Map<String, Object> target,
-                                   int i) {
+    private String getExpCondition(Column column, Map<String, Set<Object>> keyConditionValue, Object fieldValue, ConditionEnum conditionEnum, Map<String, Object> target, int i) {
         String name = column.getName();
         String keyName = name + "$" + i;
         StringBuilder conditionExp = new StringBuilder();
@@ -798,6 +756,6 @@ public class MemoryData extends AbstractData {
 
         private ConditionPart conditionPart;
 
-        private List<Partition> partitions = Lists.newArrayList();
+        private List<MemoryPartition> memoryPartitions = Lists.newArrayList();
     }
 }

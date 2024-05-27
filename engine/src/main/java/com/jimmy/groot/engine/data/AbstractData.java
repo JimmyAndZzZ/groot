@@ -1,14 +1,12 @@
 package com.jimmy.groot.engine.data;
 
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.base.Data;
 import com.jimmy.groot.engine.convert.DateConvert;
 import com.jimmy.groot.engine.convert.DefaultConvert;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.metadata.Index;
-import com.jimmy.groot.engine.other.In;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.enums.ColumnTypeEnum;
 

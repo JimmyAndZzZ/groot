@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Fragment implements Serializable {
+public class MemoryFragment implements Serializable {
 
     @Getter
     private String code;
@@ -24,21 +24,21 @@ public class Fragment implements Serializable {
 
     private List<Integer> memoryIndex = Lists.newArrayList();
 
-    private Fragment() {
+    private MemoryFragment() {
 
     }
 
-    public static Fragment build(String code, Serializer serializer, Map<String, Object> key) {
-        Fragment fragment = new Fragment();
-        fragment.key = key;
-        fragment.code = code;
-        fragment.serializer = serializer;
-        return fragment;
+    public static MemoryFragment build(String code, Serializer serializer, Map<String, Object> key) {
+        MemoryFragment memoryFragment = new MemoryFragment();
+        memoryFragment.key = key;
+        memoryFragment.code = code;
+        memoryFragment.serializer = serializer;
+        return memoryFragment;
     }
 
-    public Fragment writeMemory(Map<String, Object> data) {
+    public MemoryFragment writeMemory(Map<String, Object> data) {
         if (MapUtil.isNotEmpty(data)) {
-            this.memoryIndex = SegmentPool.getInstance().allocateFromMemory(serializer.serialize(data));
+            this.memoryIndex = MemoryPool.getInstance().allocateFromMemory(serializer.serialize(data));
         }
 
         return this;
@@ -48,7 +48,7 @@ public class Fragment implements Serializable {
         Map<String, Object> data = Maps.newHashMap();
 
         if (CollUtil.isNotEmpty(memoryIndex)) {
-            data.putAll(serializer.deserialize(SegmentPool.getInstance().get(memoryIndex), HashMap.class));
+            data.putAll(serializer.deserialize(MemoryPool.getInstance().get(memoryIndex), HashMap.class));
         }
 
         return data;

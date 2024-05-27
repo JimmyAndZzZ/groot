@@ -14,29 +14,29 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
-public class SegmentPool {
+public class MemoryPool {
 
     private final static int DEFAULT_CAPACITY = 32;
 
     private final AtomicInteger counter = new AtomicInteger(0);
 
-    private final SegmentQueue wait = new SegmentQueue();
+    private final MemoryQueue wait = new MemoryQueue();
 
-    private final IntObjectHashMap<HeapMemorySegment> pool = new IntObjectHashMap<>(216);
+    private final IntObjectHashMap<MemorySegment> pool = new IntObjectHashMap<>(216);
 
     private static class SingletonHolder {
-        private static final SegmentPool INSTANCE = new SegmentPool();
+        private static final MemoryPool INSTANCE = new MemoryPool();
     }
 
-    public static SegmentPool getInstance() {
+    public static MemoryPool getInstance() {
         return SingletonHolder.INSTANCE;
     }
 
-    private SegmentPool() {
+    private MemoryPool() {
         new Thread(() -> {
             while (true) {
                 if (wait.getLastPollTimestamp() < System.currentTimeMillis() - 60 * 1000) {
-                    HeapMemorySegment poll = wait.poll();
+                    MemorySegment poll = wait.poll();
                     if (poll != null && poll.isFree()) {
                         poll.release();
                         poll = null;
@@ -57,13 +57,13 @@ public class SegmentPool {
             List<byte[]> spilt = this.splitByteArray(bytes);
 
             for (byte[] b : spilt) {
-                HeapMemorySegment poll = wait.poll();
+                MemorySegment poll = wait.poll();
                 if (poll != null && poll.isFree() && poll.write(b)) {
                     indexes.add(poll.getIndex());
                     continue;
                 }
 
-                HeapMemorySegment memory = new HeapMemorySegment(DEFAULT_CAPACITY, counter.incrementAndGet());
+                MemorySegment memory = new MemorySegment(DEFAULT_CAPACITY, counter.incrementAndGet());
                 memory.write(b);
 
                 pool.put(memory.getIndex(), memory);
@@ -121,7 +121,7 @@ public class SegmentPool {
     }
 
     public void free(Integer index) {
-        HeapMemorySegment segment = pool.get(index);
+        MemorySegment segment = pool.get(index);
         if (segment != null) {
             segment.free();
             wait.add(segment);
