@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.core.metadata;
+package com.jimmy.groot.engine.data;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
@@ -11,18 +11,18 @@ import com.google.common.collect.Sets;
 import com.googlecode.aviator.AviatorEvaluator;
 import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
-import com.jimmy.groot.engine.core.other.ConditionPart;
-import com.jimmy.groot.engine.core.other.Fragment;
-import com.jimmy.groot.engine.enums.ColumnTypeEnum;
+import com.jimmy.groot.engine.metadata.Column;
+import com.jimmy.groot.engine.metadata.Partition;
+import com.jimmy.groot.engine.data.other.ConditionPart;
+import com.jimmy.groot.engine.data.memory.Fragment;
 import com.jimmy.groot.engine.exception.EngineException;
-import com.jimmy.groot.engine.segment.SegmentSerializer;
+import com.jimmy.groot.platform.base.Serializer;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.core.*;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
 import com.jimmy.groot.sql.other.MapComparator;
 import lombok.Data;
-import lombok.Getter;
 
 import java.io.Serializable;
 import java.util.*;
@@ -32,37 +32,36 @@ import java.util.stream.Collectors;
 import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
 import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
-public class Table implements Serializable {
+public class MemoryData implements com.jimmy.groot.engine.base.Data {
 
-    @Getter
-    private String schema;
+    private List<Column> columns;
 
-    @Getter
-    private String tableName;
+    private Serializer serializer;
 
-    private SegmentSerializer segmentSerializer;
+    private Set<String> uniqueColumns;
 
-    private List<Column> columns = Lists.newArrayList();
+    private Set<String> partitionColumns;
 
-    private Set<String> uniqueColumns = Sets.newHashSet();
+    private ConcurrentMap<String, Partition> partitions;
 
-    private Set<String> partitionColumns = Sets.newHashSet();
-
-    private ConcurrentMap<String, Partition> partitions = Maps.newConcurrentMap();
-
-    private Table() {
+    private MemoryData() {
 
     }
 
-    public static Table build(SegmentSerializer segmentSerializer, String schema, String tableName, List<Column> columns) {
+    public static MemoryData build(Serializer serializer,
+                                   String schema,
+                                   String tableName,
+                                   List<Column> columns) {
         Assert.hasText(schema, "schema为空");
         Assert.hasText(tableName, "表名为空");
         Assert.notEmpty(columns, "表字段为空");
 
-        Table table = new Table();
-        table.schema = schema;
-        table.tableName = tableName;
-        table.segmentSerializer = segmentSerializer;
+        MemoryData table = new MemoryData();
+        table.columns = columns;
+        table.serializer = serializer;
+        table.uniqueColumns = Sets.newHashSet();
+        table.partitionColumns = Sets.newHashSet();
+        table.partitions = Maps.newConcurrentMap();
 
         for (Column column : columns) {
             String name = column.getName();
@@ -81,15 +80,14 @@ public class Table implements Serializable {
         return table;
     }
 
+    @Override
     public void save(Map<String, Object> doc) {
-        Map<String, Object> diskData = Maps.newHashMap();
         Map<String, Object> memoryData = Maps.newHashMap();
         Map<String, Object> uniqueData = Maps.newHashMap();
         Map<String, Object> partitionData = Maps.newHashMap();
 
         for (Column column : columns) {
             String name = column.getName();
-            ColumnTypeEnum columnType = column.getColumnType();
 
             Object o = doc.get(name);
 
@@ -103,20 +101,17 @@ public class Table implements Serializable {
                 uniqueData.put(name, o);
             }
 
-            if (columnType.getIsStoreMemory()) {
-                memoryData.put(name, o);
-            } else {
-                diskData.put(name, o);
-            }
+            memoryData.put(name, o);
         }
 
         String uniqueKey = this.getKey(uniqueData);
         String partitionKey = this.getKey(partitionData);
 
         partitions.computeIfAbsent(partitionKey, s -> new Partition(partitionKey, partitionData));
-        partitions.get(partitionKey).save(uniqueKey, Fragment.build(uniqueKey, segmentSerializer, uniqueData).writeDisk(diskData).writeMemory(memoryData));
+        partitions.get(partitionKey).save(uniqueKey, Fragment.build(uniqueKey, serializer, uniqueData).writeMemory(memoryData));
     }
 
+    @Override
     public void remove(Map<String, Object> doc) {
         Map<String, Object> uniqueData = Maps.newHashMap();
         Map<String, Object> partitionData = Maps.newHashMap();
@@ -143,10 +138,12 @@ public class Table implements Serializable {
         }
     }
 
+    @Override
     public Collection<Map<String, Object>> page(QueryPlus queryPlus, Integer pageNo, Integer pageSize) {
         return this.aggregateHandler(queryPlus, this.queryByCondition(queryPlus, pageNo * pageSize, pageNo * pageSize + pageSize));
     }
 
+    @Override
     public Collection<Map<String, Object>> list(QueryPlus queryPlus) {
         return this.aggregateHandler(queryPlus, this.queryByCondition(queryPlus, -1, -1));
     }

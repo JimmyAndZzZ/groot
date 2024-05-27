@@ -1,7 +1,7 @@
-package com.jimmy.groot.engine.core.metadata;
+package com.jimmy.groot.engine.metadata;
 
 import com.google.common.collect.Maps;
-import com.jimmy.groot.engine.core.other.Fragment;
+import com.jimmy.groot.engine.data.memory.Fragment;
 import lombok.Getter;
 
 import java.util.Collection;

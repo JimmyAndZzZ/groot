@@ -1,9 +1,8 @@
-package com.jimmy.groot.engine.segment;
+package com.jimmy.groot.engine.data.memory;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.thread.ThreadUtil;
 import com.google.common.collect.Lists;
-import com.jimmy.groot.engine.base.Segment;
 import com.jimmy.groot.engine.exception.EngineException;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.platform.other.IntObjectHashMap;
@@ -23,7 +22,7 @@ public class SegmentPool {
 
     private final SegmentQueue wait = new SegmentQueue();
 
-    private final IntObjectHashMap<Segment> pool = new IntObjectHashMap<>(216);
+    private final IntObjectHashMap<HeapMemorySegment> pool = new IntObjectHashMap<>(216);
 
     private static class SingletonHolder {
         private static final SegmentPool INSTANCE = new SegmentPool();
@@ -37,7 +36,7 @@ public class SegmentPool {
         new Thread(() -> {
             while (true) {
                 if (wait.getLastPollTimestamp() < System.currentTimeMillis() - 60 * 1000) {
-                    Segment poll = wait.poll();
+                    HeapMemorySegment poll = wait.poll();
                     if (poll != null && poll.isFree()) {
                         poll.release();
                         poll = null;
@@ -58,13 +57,13 @@ public class SegmentPool {
             List<byte[]> spilt = this.splitByteArray(bytes);
 
             for (byte[] b : spilt) {
-                Segment poll = wait.poll();
+                HeapMemorySegment poll = wait.poll();
                 if (poll != null && poll.isFree() && poll.write(b)) {
                     indexes.add(poll.getIndex());
                     continue;
                 }
 
-                Segment memory = new HeapMemorySegment(DEFAULT_CAPACITY, counter.incrementAndGet());
+                HeapMemorySegment memory = new HeapMemorySegment(DEFAULT_CAPACITY, counter.incrementAndGet());
                 memory.write(b);
 
                 pool.put(memory.getIndex(), memory);
@@ -75,14 +74,6 @@ public class SegmentPool {
         } catch (Exception e) {
             throw new EngineException(e.getMessage());
         }
-    }
-
-    public Integer allocateFromDisk(byte[] bytes) {
-        Segment disk = new DiskSegment(counter.incrementAndGet());
-        disk.write(bytes);
-
-        pool.put(disk.getIndex(), disk);
-        return disk.getIndex();
     }
 
     public byte[] getAndFree(List<Integer> indices) {
@@ -130,13 +121,10 @@ public class SegmentPool {
     }
 
     public void free(Integer index) {
-        Segment segment = pool.get(index);
+        HeapMemorySegment segment = pool.get(index);
         if (segment != null) {
             segment.free();
-
-            if (segment.isNeedRecycle()) {
-                wait.add(segment);
-            }
+            wait.add(segment);
         }
     }
 

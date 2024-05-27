@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.core.metadata;
+package com.jimmy.groot.engine.metadata;
 
 import com.google.common.collect.Maps;
 import lombok.Data;

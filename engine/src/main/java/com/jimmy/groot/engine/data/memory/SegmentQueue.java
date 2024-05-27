@@ -1,17 +1,16 @@
-package com.jimmy.groot.engine.segment;
+package com.jimmy.groot.engine.data.memory;
 
-import com.jimmy.groot.engine.base.Segment;
 import lombok.Getter;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Getter
-public class SegmentQueue extends ConcurrentLinkedQueue<Segment> {
+public class SegmentQueue extends ConcurrentLinkedQueue<HeapMemorySegment> {
 
     private long lastPollTimestamp;
 
     @Override
-    public Segment poll() {
+    public HeapMemorySegment poll() {
         this.lastPollTimestamp = System.currentTimeMillis();
         return super.poll();
     }

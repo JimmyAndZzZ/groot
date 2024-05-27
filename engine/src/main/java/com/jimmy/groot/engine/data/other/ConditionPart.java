@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.core.other;
+package com.jimmy.groot.engine.data.other;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
