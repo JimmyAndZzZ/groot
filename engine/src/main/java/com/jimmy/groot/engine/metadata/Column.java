@@ -1,6 +1,6 @@
 package com.jimmy.groot.engine.metadata;
 
-import com.jimmy.groot.engine.enums.ColumnTypeEnum;
+import com.jimmy.groot.sql.enums.ColumnTypeEnum;
 import lombok.Data;
 
 import java.io.Serializable;

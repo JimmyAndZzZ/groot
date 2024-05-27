@@ -32,19 +32,51 @@ import java.util.stream.Collectors;
 import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
 import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
-public class MemoryData extends AbstractData {
+public class DiskData extends AbstractData {
+
+    private List<Column> columns;
 
     private Serializer serializer;
 
+    private Set<String> uniqueColumns;
+
+    private Set<String> partitionColumns;
+
     private ConcurrentMap<String, Partition> partitions;
 
-    private MemoryData(List<Column> columns) {
-        super(columns);
+    private DiskData() {
+
     }
 
-    public static MemoryData build(Serializer serializer, List<Column> columns) {
-        MemoryData table = new MemoryData(columns);
+    public static DiskData build(Serializer serializer,
+                                 String schema,
+                                 String tableName,
+                                 List<Column> columns) {
+        Assert.hasText(schema, "schema为空");
+        Assert.hasText(tableName, "表名为空");
+        Assert.notEmpty(columns, "表字段为空");
+
+        DiskData table = new DiskData();
+        table.columns = columns;
         table.serializer = serializer;
+        table.uniqueColumns = Sets.newHashSet();
+        table.partitionColumns = Sets.newHashSet();
+        table.partitions = Maps.newConcurrentMap();
+
+        for (Column column : columns) {
+            String name = column.getName();
+
+            if (column.getIsPartitionKey()) {
+                table.partitionColumns.add(name);
+            }
+
+            if (column.getIsUniqueKey()) {
+                table.uniqueColumns.add(name);
+            }
+        }
+
+        Assert.notEmpty(table.partitionColumns, "分区键为空");
+        Assert.notEmpty(table.uniqueColumns, "唯一键为空");
         return table;
     }
 
@@ -511,8 +543,6 @@ public class MemoryData extends AbstractData {
     private List<ConditionPart> analyzeCondition(List<ConditionGroup> conditionGroups) {
         int i = 0;
         List<ConditionPart> parts = Lists.newArrayList();
-        Set<String> uniqueIndexColumns = uniqueIndex.getColumns();
-        Set<String> partitionIndexColumns = partitionIndex.getColumns();
         Map<String, Column> columnMap = columns.stream().collect(Collectors.toMap(Column::getName, g -> g));
         //遍历关联关系
         for (ConditionGroup conditionGroup : conditionGroups) {
@@ -539,7 +569,7 @@ public class MemoryData extends AbstractData {
 
                     fullExpression.append(expCondition);
 
-                    if (uniqueIndex.contain(fieldName)) {
+                    if (uniqueColumns.contains(fieldName)) {
                         if (StrUtil.isNotBlank(uniqueExpression)) {
                             uniqueExpression.append(ConditionTypeEnum.AND.getExpression());
                         }
@@ -547,7 +577,7 @@ public class MemoryData extends AbstractData {
                         uniqueExpression.append(expCondition);
                     }
 
-                    if (partitionIndex.contain(fieldName)) {
+                    if (partitionColumns.contains(fieldName)) {
                         if (StrUtil.isNotBlank(partitionExpression)) {
                             partitionExpression.append(ConditionTypeEnum.AND.getExpression());
                         }
@@ -560,8 +590,8 @@ public class MemoryData extends AbstractData {
                 part.setUniqueExpression(uniqueExpression.toString());
                 part.setPartitionExpression(partitionExpression.toString());
                 //唯一键值计算
-                if (this.mapContainKeys(keyConditionValue, uniqueIndexColumns)) {
-                    List<Map<String, Object>> result = this.generateCombinations(keyConditionValue, uniqueIndexColumns);
+                if (this.mapContainKeys(keyConditionValue, uniqueColumns)) {
+                    List<Map<String, Object>> result = this.generateCombinations(keyConditionValue, uniqueColumns);
 
                     if (CollUtil.isNotEmpty(result)) {
                         for (Map<String, Object> map : result) {
@@ -570,8 +600,8 @@ public class MemoryData extends AbstractData {
                     }
                 }
                 //分区键值计算
-                if (this.mapContainKeys(keyConditionValue, partitionIndexColumns)) {
-                    List<Map<String, Object>> result = this.generateCombinations(keyConditionValue, partitionIndexColumns);
+                if (this.mapContainKeys(keyConditionValue, partitionColumns)) {
+                    List<Map<String, Object>> result = this.generateCombinations(keyConditionValue, partitionColumns);
 
                     if (CollUtil.isNotEmpty(result)) {
                         for (Map<String, Object> map : result) {
