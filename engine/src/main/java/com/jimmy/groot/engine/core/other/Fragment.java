@@ -5,11 +5,11 @@ import cn.hutool.core.map.MapUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jimmy.groot.engine.store.SegmentPool;
-import com.jimmy.groot.engine.store.SegmentSerializer;
-import lombok.Data;
+import com.jimmy.groot.platform.base.Serializer;
 import lombok.Getter;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,7 +20,7 @@ public class Fragment implements Serializable {
 
     private Integer diskIndex;
 
-    private SegmentSerializer segmentSerializer;
+    private Serializer serializer;
 
     @Getter
     private Map<String, Object> key = Maps.newHashMap();
@@ -31,17 +31,17 @@ public class Fragment implements Serializable {
 
     }
 
-    public static Fragment build(String code, SegmentSerializer segmentSerializer, Map<String, Object> key) {
+    public static Fragment build(String code, Serializer serializer, Map<String, Object> key) {
         Fragment fragment = new Fragment();
         fragment.key = key;
         fragment.code = code;
-        fragment.segmentSerializer = segmentSerializer;
+        fragment.serializer = serializer;
         return fragment;
     }
 
     public Fragment writeDisk(Map<String, Object> data) {
         if (MapUtil.isNotEmpty(data)) {
-            this.diskIndex = SegmentPool.getInstance().allocateFromDisk(segmentSerializer.serialize(data));
+            this.diskIndex = SegmentPool.getInstance().allocateFromDisk(serializer.serialize(data));
         }
 
         return this;
@@ -49,7 +49,7 @@ public class Fragment implements Serializable {
 
     public Fragment writeMemory(Map<String, Object> data) {
         if (MapUtil.isNotEmpty(data)) {
-            this.memoryIndex = SegmentPool.getInstance().allocateFromMemory(segmentSerializer.serialize(data));
+            this.memoryIndex = SegmentPool.getInstance().allocateFromMemory(serializer.serialize(data));
         }
 
         return this;
@@ -59,11 +59,11 @@ public class Fragment implements Serializable {
         Map<String, Object> data = Maps.newHashMap();
 
         if (diskIndex != null) {
-            data.putAll(segmentSerializer.deserialize(SegmentPool.getInstance().get(diskIndex)));
+            data.putAll(serializer.deserialize(SegmentPool.getInstance().get(diskIndex), HashMap.class));
         }
 
         if (CollUtil.isNotEmpty(memoryIndex)) {
-            data.putAll(segmentSerializer.deserialize(SegmentPool.getInstance().get(memoryIndex)));
+            data.putAll(serializer.deserialize(SegmentPool.getInstance().get(memoryIndex), HashMap.class));
         }
 
         return data;

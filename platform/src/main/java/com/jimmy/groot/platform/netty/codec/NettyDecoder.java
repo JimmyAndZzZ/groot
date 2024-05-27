@@ -1,5 +1,6 @@
 package com.jimmy.groot.platform.netty.codec;
 
+import com.jimmy.groot.platform.base.Serializer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
@@ -12,10 +13,10 @@ public class NettyDecoder extends ByteToMessageDecoder {
 
     private final Class<?> genericClass;
 
-    private final NettySerializer nettySerializer;
+    private final Serializer serializer;
 
-    public NettyDecoder(NettySerializer nettySerializer, Class<?> genericClass) {
-        this.nettySerializer = nettySerializer;
+    public NettyDecoder(Serializer serializer, Class<?> genericClass) {
+        this.serializer = serializer;
         this.genericClass = genericClass;
     }
 
@@ -39,7 +40,7 @@ public class NettyDecoder extends ByteToMessageDecoder {
             //到这里就可以正常反序列化了
             byte[] body = new byte[dataLength];
             byteBuf.readBytes(body);
-            Object object = nettySerializer.deserialize(body, genericClass);
+            Object object = serializer.deserialize(body, genericClass);
             list.add(object);
         }
     }

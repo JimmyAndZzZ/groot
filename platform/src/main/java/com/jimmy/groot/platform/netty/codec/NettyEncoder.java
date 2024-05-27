@@ -1,15 +1,17 @@
 package com.jimmy.groot.platform.netty.codec;
 
+import com.jimmy.groot.platform.base.Serializer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
 
 public class NettyEncoder extends MessageToByteEncoder {
-    private final NettySerializer nettySerializer;
+
+    private final Serializer serializer;
     private final Class<?> genericClass;
 
-    public NettyEncoder(NettySerializer nettySerializer, Class<?> genericClass) {
-        this.nettySerializer = nettySerializer;
+    public NettyEncoder(Serializer serializer, Class<?> genericClass) {
+        this.serializer = serializer;
         this.genericClass = genericClass;
     }
 
@@ -25,7 +27,7 @@ public class NettyEncoder extends MessageToByteEncoder {
     protected void encode(ChannelHandlerContext channelHandlerContext, Object o, ByteBuf byteBuf) throws Exception {
         if (genericClass.isInstance(o)) {
             //将对象转换为byte数组
-            byte[] bytes = nettySerializer.serialize(o);
+            byte[] bytes = serializer.serialize(o);
             //获取消息长度
             int length = bytes.length;
             //写入消息对应的字节数组长度

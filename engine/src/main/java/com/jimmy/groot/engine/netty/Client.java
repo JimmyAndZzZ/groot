@@ -60,7 +60,7 @@ public class Client {
         bootstrap.group(group).channel(NioSocketChannel.class).option(ChannelOption.TCP_NODELAY, true).option(ChannelOption.TCP_NODELAY, Boolean.TRUE).option(ChannelOption.SO_REUSEADDR, Boolean.TRUE).option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT).handler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel channel) throws Exception {
-                ChannelPipeline pipeline = channel.pipeline();
+                ChannelPipeline pipeline = channel.pipeline();6
                 pipeline.addLast("decoder", new NettyDecoder(Event.class));
                 pipeline.addLast("encoder", new NettyEncoder(Event.class));
                 pipeline.addLast(new ClientHandler(configLoad, applicationContext, Client.this));
