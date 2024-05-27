@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.store;
+package com.jimmy.groot.engine.segment;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.thread.ThreadUtil;

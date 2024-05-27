@@ -15,7 +15,7 @@ import com.jimmy.groot.engine.core.other.ConditionPart;
 import com.jimmy.groot.engine.core.other.Fragment;
 import com.jimmy.groot.engine.enums.ColumnTypeEnum;
 import com.jimmy.groot.engine.exception.EngineException;
-import com.jimmy.groot.engine.store.SegmentSerializer;
+import com.jimmy.groot.engine.segment.SegmentSerializer;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.core.*;
 import com.jimmy.groot.sql.enums.ConditionEnum;

@@ -4,7 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.jimmy.groot.engine.store.SegmentPool;
+import com.jimmy.groot.engine.segment.SegmentPool;
 import com.jimmy.groot.platform.base.Serializer;
 import lombok.Getter;
 

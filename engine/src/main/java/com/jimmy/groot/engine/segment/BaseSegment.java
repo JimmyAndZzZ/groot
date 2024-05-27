@@ -1,4 +1,4 @@
-package com.jimmy.groot.engine.store;
+package com.jimmy.groot.engine.segment;
 
 import com.jimmy.groot.engine.base.Segment;
 import lombok.Getter;
