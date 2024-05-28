@@ -1,5 +1,6 @@
 package com.jimmy.groot.engine.convert;
 
+import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.date.DateUtil;
 import com.jimmy.groot.engine.base.Convert;
 
@@ -9,6 +10,11 @@ public class DateConvert implements Convert<Date> {
 
     @Override
     public Date convert(Object o) {
-        return DateUtil.parse(o.toString());
+        return o != null ? DateUtil.parse(o.toString()) : null;
+    }
+
+    @Override
+    public String toString(Date o) {
+        return o != null ? DateUtil.format(o, DatePattern.NORM_DATETIME_MS_PATTERN) : null;
     }
 }

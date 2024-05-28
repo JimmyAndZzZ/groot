@@ -32,18 +32,18 @@ import java.util.stream.Collectors;
 import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
 import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
-public class DiskData extends AbstractData {
+public class LsmData extends AbstractData {
 
     private Serializer serializer;
 
     private ConcurrentMap<String, MemoryPartition> partitions;
 
-    private DiskData(List<Column> columns) {
+    private LsmData(List<Column> columns) {
         super(columns);
     }
 
-    public static DiskData build(Serializer serializer, List<Column> columns) {
-        DiskData table = new DiskData(columns);
+    public static LsmData build(Serializer serializer, List<Column> columns) {
+        LsmData table = new LsmData(columns);
         table.serializer = serializer;
         table.partitions = Maps.newConcurrentMap();
         return table;
