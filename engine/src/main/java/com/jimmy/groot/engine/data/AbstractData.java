@@ -21,7 +21,6 @@ public abstract class AbstractData implements Data {
 
     protected Index partitionIndex;
 
-
     protected List<Column> columns;
 
     public AbstractData(List<Column> columns) {
