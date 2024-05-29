@@ -1,41 +1,21 @@
 package com.jimmy.groot.engine.data.lsm;
 
-import lombok.Data;
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
 
 public class TableMetaData implements Serializable {
 
-    /**
-     * 版本号
-     */
     private long version;
 
-    /**
-     * 数据区开始
-     */
     private long dataStart;
 
-    /**
-     * 数据区长度
-     */
     private long dataLen;
 
-    /**
-     * 索引区开始
-     */
     private long indexStart;
 
-    /**
-     * 索引区长度
-     */
     private long indexLen;
 
-    /**
-     * 分段大小
-     */
     private long partSize;
 
     TableMetaData() {
