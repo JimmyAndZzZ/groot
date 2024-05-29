@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
@@ -20,7 +21,6 @@ import java.util.TreeMap;
 
 @Slf4j
 public class SsTable implements Closeable {
-
 
     private ObjectMapper objectMapper;
 
@@ -51,6 +51,23 @@ public class SsTable implements Closeable {
         ssTable.tableMetaData = new TableMetaData();
         ssTable.tableMetaData.setPartSize(partSize);
         return ssTable;
+    }
+
+    TreeMap<String, TableData> load() {
+        try {
+            long dataLen = tableMetaData.getDataLen();
+            long dataStart = tableMetaData.getDataStart();
+            //读取所有数据
+            byte[] indexBytes = new byte[(int) dataLen];
+            tableFile.seek(dataStart);
+            tableFile.read(indexBytes);
+            String dataStr = new String(indexBytes, StandardCharsets.UTF_8);
+            return objectMapper.readValue(dataStr, new TypeReference<TreeMap<String, TableData>>() {
+            });
+        } catch (Exception e) {
+            log.error("读取ssTable数据失败", e);
+            throw new EngineException("读取ssTable数据失败");
+        }
     }
 
     void write(TreeMap<String, TableData> data) {
