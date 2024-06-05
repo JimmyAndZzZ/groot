@@ -22,4 +22,8 @@ public class Index implements Serializable {
     public boolean isEmpty() {
         return this.columns.isEmpty();
     }
+
+    public int size() {
+        return columns.size();
+    }
 }

@@ -35,7 +35,13 @@ public class SsTable implements Closeable {
 
     }
 
-    static SsTable build(String filePath, Long partSize) {
+    static SsTable restore(String filePath, ObjectMapper objectMapper) {
+        SsTable ssTable = build(filePath, 0L, objectMapper);
+        ssTable.restoreFromFile();
+        return ssTable;
+    }
+
+    static SsTable build(String filePath, Long partSize, ObjectMapper objectMapper) {
         SsTable ssTable = new SsTable();
 
         try {
@@ -46,9 +52,8 @@ public class SsTable implements Closeable {
             throw new EngineException("创建ssTable文件失败");
         }
 
+        ssTable.objectMapper = objectMapper;
         ssTable.sparseIndex = new TreeMap<>();
-        ssTable.objectMapper = new ObjectMapper();
-
         ssTable.tableMetaData = new TableMetaData();
         ssTable.tableMetaData.setPartSize(partSize);
         return ssTable;
@@ -172,6 +177,30 @@ public class SsTable implements Closeable {
     @Override
     public void close() throws IOException {
         tableFile.close();
+    }
+
+    /**
+     * 从文件中恢复ssTable到内存
+     */
+    private void restoreFromFile() {
+        try {
+            //先读取索引
+            TableMetaData tableMetaData = TableMetaData.readFromFile(tableFile);
+            //读取稀疏索引
+            byte[] indexBytes = new byte[(int) tableMetaData.getIndexLen()];
+            tableFile.seek(tableMetaData.getIndexStart());
+            tableFile.read(indexBytes);
+            String indexStr = new String(indexBytes, StandardCharsets.UTF_8);
+
+            this.sparseIndex = objectMapper.readValue(indexStr,
+                    new TypeReference<TreeMap<String, Position>>() {
+                    });
+
+            this.tableMetaData = tableMetaData;
+        } catch (Exception e) {
+            log.error("恢复ssTable失败", e);
+            throw new EngineException("恢复ssTable失败");
+        }
     }
 
     /**
