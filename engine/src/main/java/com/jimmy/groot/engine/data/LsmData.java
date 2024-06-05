@@ -8,13 +8,16 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.data.lsm.LsmPartition;
+import com.jimmy.groot.engine.data.other.ConditionPart;
 import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.metadata.Row;
 import com.jimmy.groot.sql.core.Condition;
 import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.enums.ConditionEnum;
+import lombok.Data;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -73,8 +76,7 @@ public class LsmData extends AbstractData {
             String uniqueDataKey = uniqueData.getKey();
             String partitionDataKey = partitionData.getKey();
 
-            partitions.computeIfAbsent(partitionDataKey, s -> LsmPartition.build(dataDir,
-                    tableName,
+            partitions.computeIfAbsent(partitionDataKey, s -> LsmPartition.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH,
                     storeThreshold,
                     partSize,
                     expectCount));
@@ -135,27 +137,36 @@ public class LsmData extends AbstractData {
         return null;
     }
 
+
     /**
-     * 选取分区
+     * 条件分析
      *
      * @param conditions
      * @return
      */
-    private List<LsmPartition> selectPartition(List<Condition> conditions) {
+    private ConditionPart analysisCondition(List<Condition> conditions) {
+        Map<String, Set<Object>> uniqueData = Maps.newHashMap();
         Map<String, Set<Object>> partitionData = Maps.newHashMap();
+        Map<String, Condition> uniqueConditions = Maps.newHashMap();
         Map<String, Condition> partitionConditions = Maps.newHashMap();
 
         for (Condition condition : conditions) {
             String fieldName = condition.getFieldName();
             ConditionEnum conditionEnum = condition.getConditionEnum();
 
-            if (!partitionIndex.contain(fieldName)) {
-                continue;
+            if (partitionIndex.contain(fieldName)) {
+                if (conditionEnum.equals(ConditionEnum.EQ) || conditionEnum.equals(ConditionEnum.IN)) {
+                    if (partitionConditions.put(fieldName, condition) != null) {
+                        throw new SqlException("包含多个分区条件");
+                    }
+                }
             }
 
-            if (conditionEnum.equals(ConditionEnum.EQ) || conditionEnum.equals(ConditionEnum.IN)) {
-                if (partitionConditions.put(fieldName, condition) != null) {
-                    throw new SqlException("包含多个分区条件");
+            if (uniqueIndex.contain(fieldName)) {
+                if (conditionEnum.equals(ConditionEnum.EQ) || conditionEnum.equals(ConditionEnum.IN)) {
+                    if (uniqueConditions.put(fieldName, condition) != null) {
+                        throw new SqlException("包含多个分区条件");
+                    }
                 }
             }
         }
@@ -199,18 +210,13 @@ public class LsmData extends AbstractData {
             throw new SqlException("选取分区失败");
         }
 
-        List<LsmPartition> select = Lists.newArrayList();
+        ConditionPart conditionPart = new ConditionPart();
 
         for (Map<String, Object> map : maps) {
-            String key = super.getKey(map);
-
-            LsmPartition lsmPartition = partitions.get(key);
-            if (lsmPartition != null) {
-                select.add(lsmPartition);
-            }
+            conditionPart.getPartitionCodes().add(super.getKey(map));
         }
 
-        return select;
+        return conditionPart;
     }
 
     /**
