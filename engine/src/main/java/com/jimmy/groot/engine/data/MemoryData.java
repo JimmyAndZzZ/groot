@@ -51,59 +51,24 @@ public class MemoryData extends AbstractData {
 
     @Override
     public void save(Map<String, Object> doc) {
-        Map<String, Object> memoryData = Maps.newHashMap();
-        Map<String, Object> uniqueData = Maps.newHashMap();
-        Map<String, Object> partitionData = Maps.newHashMap();
+        IndexData uniqueData = super.getUniqueData(doc);
+        IndexData partitionData = super.getPartitionData(doc);
 
-        for (Column column : columns) {
-            String name = column.getName();
+        String uniqueDataKey = uniqueData.getKey();
+        String partitionDataKey = partitionData.getKey();
 
-            Object o = doc.get(name);
-
-            if (column.getIsPartitionKey()) {
-                Assert.notNull(o, "分区键值为空，字段名:" + name);
-                partitionData.put(name, o);
-            }
-
-            if (column.getIsUniqueKey()) {
-                Assert.notNull(o, "唯一键值为空，字段名:" + name);
-                uniqueData.put(name, o);
-            }
-
-            memoryData.put(name, o);
-        }
-
-        String uniqueKey = this.getKey(uniqueData);
-        String partitionKey = this.getKey(partitionData);
-
-        partitions.computeIfAbsent(partitionKey, s -> new MemoryPartition(partitionKey, partitionData));
-        partitions.get(partitionKey).save(uniqueKey, MemoryFragment.build(uniqueKey, serializer, uniqueData).writeMemory(memoryData));
+        partitions.computeIfAbsent(partitionDataKey, s -> new MemoryPartition(partitionDataKey, partitionData.getData()));
+        partitions.get(partitionDataKey).save(uniqueDataKey, MemoryFragment.build(uniqueDataKey, serializer, uniqueData.getData()).writeMemory(doc));
     }
 
     @Override
     public void remove(Map<String, Object> doc) {
-        Map<String, Object> uniqueData = Maps.newHashMap();
-        Map<String, Object> partitionData = Maps.newHashMap();
+        IndexData uniqueData = super.getUniqueData(doc);
+        IndexData partitionData = super.getPartitionData(doc);
 
-        for (Column column : columns) {
-            String name = column.getName();
-
-            Object o = doc.get(name);
-
-            if (column.getIsPartitionKey()) {
-                Assert.notNull(o, "分区键值为空，字段名:" + name);
-                partitionData.put(name, o);
-            }
-
-            if (column.getIsUniqueKey()) {
-                Assert.notNull(o, "唯一键值为空，字段名:" + name);
-                uniqueData.put(name, o);
-            }
-        }
-
-        MemoryPartition memoryPartition = partitions.get(this.getKey(partitionData));
+        MemoryPartition memoryPartition = partitions.get(partitionData.getKey());
         if (memoryPartition != null) {
-            memoryPartition.remove(this.getKey(uniqueData));
+            memoryPartition.remove(uniqueData.getKey());
         }
     }
 
@@ -449,25 +414,6 @@ public class MemoryData extends AbstractData {
 
 
     /**
-     * 获取键值
-     *
-     * @param data
-     * @return
-     */
-    private String getKey(Map<String, Object> data) {
-        // 将 Map 按 ASCII 码排序
-        Map<String, Object> sortedMap = new TreeMap<>(data);
-
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, Object> entry : sortedMap.entrySet()) {
-            sb.append(entry.getKey()).append("=").append(entry.getValue().toString()).append("&");
-        }
-
-        return SecureUtil.md5(sb.toString());
-    }
-
-
-    /**
      * 获取条件分片
      *
      * @param conditionGroups
@@ -530,7 +476,7 @@ public class MemoryData extends AbstractData {
 
                     if (CollUtil.isNotEmpty(result)) {
                         for (Map<String, Object> map : result) {
-                            part.getUniqueCodes().add(this.getKey(map));
+                            part.getUniqueCodes().add(super.getKey(map));
                         }
                     }
                 }
@@ -540,7 +486,7 @@ public class MemoryData extends AbstractData {
 
                     if (CollUtil.isNotEmpty(result)) {
                         for (Map<String, Object> map : result) {
-                            part.getPartitionCodes().add(this.getKey(map));
+                            part.getPartitionCodes().add(super.getKey(map));
                         }
                     }
                 }
