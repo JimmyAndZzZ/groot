@@ -12,7 +12,7 @@ import java.util.TreeMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class LsmStore {
+public class LsmPartition {
 
     private static final int COMPACT_SIZE = 3;
 
@@ -36,12 +36,12 @@ public class LsmStore {
 
     private TreeMap<String, TableData> immutableIndex;
 
-    private LsmStore() {
+    private LsmPartition() {
 
     }
 
-    public static LsmStore build(String dataDir, String tableName, int storeThreshold, int partSize, int expectCount) {
-        LsmStore lsmStore = new LsmStore();
+    public static LsmPartition build(String dataDir, String tableName, int storeThreshold, long partSize, int expectCount) {
+        LsmPartition lsmStore = new LsmPartition();
         lsmStore.dataDir = dataDir;
         lsmStore.partSize = partSize;
         lsmStore.tableName = tableName;
@@ -88,16 +88,13 @@ public class LsmStore {
         }
     }
 
-    public void set(String key, String columnName, String value) {
+    public void set(String key, String value) {
         bloomFilter.put(key);
+        this.store(key, value, TableDataTypeEnum.SET);
+    }
 
-        TableData tableData = new TableData(columnName, value, TableDataTypeEnum.SET);
-        this.index.put(key, tableData);
-        //内存表大小超过阈值进行持久化
-        if (index.size() > storeThreshold) {
-            switchIndex();
-            storeToSsTable();
-        }
+    public void remove(String key) {
+        this.store(key, null, TableDataTypeEnum.REMOVE);
     }
 
     public String get(String key) {
@@ -137,6 +134,23 @@ public class LsmStore {
             return null;
         } finally {
             indexLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * 保存
+     *
+     * @param key
+     * @param value
+     * @param tableDataTypeEnum
+     */
+    private void store(String key, String value, TableDataTypeEnum tableDataTypeEnum) {
+        TableData tableData = new TableData(key, value, tableDataTypeEnum);
+        this.index.put(key, tableData);
+        //内存表大小超过阈值进行持久化
+        if (index.size() > storeThreshold) {
+            switchIndex();
+            storeToSsTable();
         }
     }
 
