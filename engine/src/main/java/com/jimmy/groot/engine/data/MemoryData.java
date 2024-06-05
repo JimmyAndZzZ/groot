@@ -4,7 +4,6 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.crypto.SecureUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -12,13 +11,16 @@ import com.googlecode.aviator.AviatorEvaluator;
 import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.data.memory.MemoryFragment;
-import com.jimmy.groot.engine.data.other.ConditionPart;
-import com.jimmy.groot.engine.exception.EngineException;
-import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.data.memory.MemoryPartition;
+import com.jimmy.groot.engine.data.other.ConditionPart;
+import com.jimmy.groot.engine.exception.SqlException;
+import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.platform.base.Serializer;
 import com.jimmy.groot.platform.other.Assert;
-import com.jimmy.groot.sql.core.*;
+import com.jimmy.groot.sql.core.AggregateEnum;
+import com.jimmy.groot.sql.core.AggregateFunction;
+import com.jimmy.groot.sql.core.Condition;
+import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
 import com.jimmy.groot.sql.other.MapComparator;
@@ -419,16 +421,14 @@ public class MemoryData extends AbstractData {
      * @param conditionGroups
      * @return
      */
-    private List<ConditionPart> analyzeCondition(List<ConditionGroup> conditionGroups) {
+    private List<ConditionPart> analyzeCondition(List<List<Condition>> conditionGroups) {
         int i = 0;
         List<ConditionPart> parts = Lists.newArrayList();
         Set<String> uniqueIndexColumns = uniqueIndex.getColumns();
         Set<String> partitionIndexColumns = partitionIndex.getColumns();
         Map<String, Column> columnMap = columns.stream().collect(Collectors.toMap(Column::getName, g -> g));
         //遍历关联关系
-        for (ConditionGroup conditionGroup : conditionGroups) {
-            List<Condition> groupConditions = conditionGroup.getConditions();
-
+        for (List<Condition> groupConditions : conditionGroups) {
             if (CollUtil.isNotEmpty(groupConditions)) {
                 ConditionPart part = new ConditionPart();
                 StringBuilder fullExpression = new StringBuilder();
@@ -472,7 +472,7 @@ public class MemoryData extends AbstractData {
                 part.setPartitionExpression(partitionExpression.toString());
                 //唯一键值计算
                 if (this.mapContainKeys(keyConditionValue, uniqueIndexColumns)) {
-                    List<Map<String, Object>> result = this.generateCombinations(keyConditionValue, uniqueIndexColumns);
+                    List<Map<String, Object>> result = super.generateCombinations(keyConditionValue, uniqueIndexColumns);
 
                     if (CollUtil.isNotEmpty(result)) {
                         for (Map<String, Object> map : result) {
@@ -482,7 +482,7 @@ public class MemoryData extends AbstractData {
                 }
                 //分区键值计算
                 if (this.mapContainKeys(keyConditionValue, partitionIndexColumns)) {
-                    List<Map<String, Object>> result = this.generateCombinations(keyConditionValue, partitionIndexColumns);
+                    List<Map<String, Object>> result = super.generateCombinations(keyConditionValue, partitionIndexColumns);
 
                     if (CollUtil.isNotEmpty(result)) {
                         for (Map<String, Object> map : result) {
@@ -496,50 +496,6 @@ public class MemoryData extends AbstractData {
         }
 
         return parts;
-    }
-
-
-    private List<Map<String, Object>> generateCombinations(Map<String, Set<Object>> inputMap, Set<String> keysToCombine) {
-
-        List<Map<String, Object>> result = Lists.newArrayList();
-        if (MapUtil.isEmpty(inputMap) || CollUtil.isEmpty(keysToCombine)) {
-            return result;
-        }
-        // Filter the keys based on the provided list
-        List<String> keys = new ArrayList<>();
-        for (String key : inputMap.keySet()) {
-            if (keysToCombine.contains(key)) {
-                keys.add(key);
-            }
-        }
-
-        generateConditionCombinations(inputMap, keys, 0, new HashMap<>(), result);
-        return result;
-    }
-
-    /**
-     * 生成条件组合键值
-     *
-     * @param inputMap
-     * @param keys
-     * @param index
-     * @param currentCombination
-     * @param result
-     */
-    private void generateConditionCombinations(Map<String, Set<Object>> inputMap, List<String> keys, int index, Map<String, Object> currentCombination, List<Map<String, Object>> result) {
-        if (index == keys.size()) {
-            result.add(new HashMap<>(currentCombination));
-            return;
-        }
-
-        String currentKey = keys.get(index);
-        Set<Object> values = inputMap.get(currentKey);
-
-        for (Object value : values) {
-            currentCombination.put(currentKey, value);
-            generateConditionCombinations(inputMap, keys, index + 1, currentCombination, result);
-            currentCombination.remove(currentKey); // Backtrack
-        }
     }
 
     /**
@@ -618,7 +574,7 @@ public class MemoryData extends AbstractData {
 
                 Collection<?> inCollection = (Collection<?>) fieldValue;
                 if (CollUtil.isEmpty(inCollection)) {
-                    throw new IllegalArgumentException("not in 集合为空");
+                    throw new IllegalArgumentException("in 集合为空");
                 }
 
                 List<?> inCollect = inCollection.stream().map(convert::convert).collect(Collectors.toList());
@@ -666,7 +622,7 @@ public class MemoryData extends AbstractData {
                 target.put(keyName, this.likeValueHandler(fieldValue));
                 break;
             default:
-                throw new EngineException("不支持查询条件");
+                throw new SqlException("不支持查询条件");
         }
 
         return conditionExp.toString();

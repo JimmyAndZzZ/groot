@@ -10,13 +10,13 @@ import java.util.*;
 @Data
 public class QueryPlus implements Serializable {
 
-    private List<ConditionGroup> conditionGroups = new ArrayList<>();
+    private Set<String> select = new HashSet<>();
 
     private List<Order> orders = new ArrayList<>();
 
-    private Set<String> select = new HashSet<>();
-
     private List<String> groupBy = new ArrayList<>();
+
+    private List<List<Condition>> conditionGroups = new ArrayList<>();
 
     private List<AggregateFunction> aggregateFunctions = new ArrayList<>();
 
@@ -25,9 +25,7 @@ public class QueryPlus implements Serializable {
     }
 
     QueryPlus addGroup(List<Condition> conditions) {
-        ConditionGroup conditionGroup = new ConditionGroup();
-        conditionGroup.setConditions(conditions);
-        conditionGroups.add(conditionGroup);
+        conditionGroups.add(conditions);
         return this;
     }
 
