@@ -206,6 +206,7 @@ public class LsmPartition {
 
             byte[] bytes = objectMapper.writeValueAsBytes(tableData);
             //先保存数据到WAL中
+            wal.seek(wal.length());
             wal.writeInt(bytes.length);
             wal.write(bytes);
 
