@@ -19,4 +19,8 @@ public class TableData implements Serializable {
         this.value = value;
         this.tableDataType = tableDataType;
     }
+
+    TableData() {
+        
+    }
 }
