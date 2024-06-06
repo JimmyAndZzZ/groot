@@ -76,7 +76,9 @@ public class LsmData extends AbstractData {
             String uniqueDataKey = uniqueData.getKey();
             String partitionDataKey = partitionData.getKey();
 
-            partitions.computeIfAbsent(partitionDataKey, s -> LsmPartition.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH,
+            String path = dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH + partitionDataKey + StrUtil.SLASH;
+            partitions.computeIfAbsent(partitionDataKey, s -> LsmPartition.build(
+                    path,
                     storeThreshold,
                     partSize,
                     expectCount));
