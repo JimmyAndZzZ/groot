@@ -33,8 +33,8 @@ public abstract class AbstractData implements Data {
         this.converts.put(ColumnTypeEnum.DATE, new DateConvert());
 
         this.columns = columns;
-        this.uniqueIndex = new Index();
-        this.partitionIndex = new Index();
+        this.uniqueIndex = new Index("unique key");
+        this.partitionIndex = new Index("partition key");
 
         for (Column column : columns) {
             String name = column.getName();

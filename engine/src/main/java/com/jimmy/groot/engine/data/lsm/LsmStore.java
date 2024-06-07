@@ -2,8 +2,10 @@ package com.jimmy.groot.engine.data.lsm;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.json.JSONObject;
+import cn.hutool.core.map.MapUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
 import com.jimmy.groot.engine.enums.TableDataTypeEnum;
@@ -14,15 +16,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Slf4j
-public class LsmPartition {
+public class LsmStore {
 
     private static final String WAL = "wal";
 
@@ -58,12 +57,12 @@ public class LsmPartition {
 
     private TreeMap<String, TableData> immutableIndex;
 
-    private LsmPartition() {
+    private LsmStore() {
     }
 
-    public static LsmPartition build(String dataDir, int storeThreshold, long partSize, int expectCount) {
+    public static LsmStore build(String dataDir, int storeThreshold, long partSize, int expectCount) {
         try {
-            LsmPartition lsmStore = new LsmPartition();
+            LsmStore lsmStore = new LsmStore();
             lsmStore.dataDir = dataDir;
             lsmStore.partSize = partSize;
             lsmStore.index = new TreeMap<>();
@@ -110,6 +109,42 @@ public class LsmPartition {
             return lsmStore;
         } catch (FileNotFoundException t) {
             throw new EngineException(t.getMessage());
+        }
+    }
+
+    public long total() {
+        indexLock.readLock().lock();
+        try {
+            return index.size() + immutableIndex.size() + ssTables.stream().mapToLong(SsTable::count).sum();
+        } finally {
+            indexLock.readLock().unlock();
+        }
+    }
+
+    public TreeMap<String, String> all() {
+        if (CollUtil.isEmpty(ssTables)) {
+            return Maps.newTreeMap();
+        }
+
+        indexLock.readLock().lock();
+        try {
+            TreeMap<String, String> result = new TreeMap<>();
+
+            for (int i = ssTables.size() - 1; i >= 0; i--) {
+                SsTable table = ssTables.get(i);
+
+                TreeMap<String, TableData> load = table.load();
+                if (MapUtil.isEmpty(load)) {
+                    continue;
+                }
+
+                this.loadData(load, result);
+            }
+
+            this.loadData(index, result);
+            return result;
+        } finally {
+            indexLock.readLock().unlock();
         }
     }
 
@@ -189,6 +224,30 @@ public class LsmPartition {
             return null;
         } finally {
             indexLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * 加载数据
+     *
+     * @param load
+     * @param result
+     */
+    private void loadData(TreeMap<String, TableData> load, TreeMap<String, String> result) {
+        if (MapUtil.isNotEmpty(load)) {
+            for (Map.Entry<String, TableData> entry : load.entrySet()) {
+                String key = entry.getKey();
+                TableData value = entry.getValue();
+
+                TableDataTypeEnum tableDataType = value.getTableDataType();
+                switch (tableDataType) {
+                    case SET:
+                        result.put(key, value.getValue());
+                        break;
+                    case REMOVE:
+                        result.remove(key);
+                }
+            }
         }
     }
 
