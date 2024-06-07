@@ -18,8 +18,18 @@ public class TableMetaData implements Serializable {
 
     private long partSize;
 
+    private long total;
+
     TableMetaData() {
 
+    }
+
+    long getTotal() {
+        return total;
+    }
+
+    void setTotal(long total) {
+        this.total = total;
     }
 
     long getVersion() {
@@ -71,6 +81,7 @@ public class TableMetaData implements Serializable {
     }
 
     void writeToFile(RandomAccessFile file) throws IOException {
+        file.writeLong(total);
         file.writeLong(partSize);
         file.writeLong(dataStart);
         file.writeLong(dataLen);
@@ -106,6 +117,9 @@ public class TableMetaData implements Serializable {
 
         file.seek(fileLen - 8 * 6);
         tableMetaInfo.setPartSize(file.readLong());
+
+        file.seek(fileLen - 8 * 7);
+        tableMetaInfo.setTotal(file.readLong());
 
         return tableMetaInfo;
     }

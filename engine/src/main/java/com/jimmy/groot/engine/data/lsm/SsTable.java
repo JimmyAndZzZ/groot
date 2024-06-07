@@ -59,6 +59,10 @@ public class SsTable implements Closeable {
         return ssTable;
     }
 
+    long count() {
+        return tableMetaData.getTotal();
+    }
+
     TreeMap<String, TableData> load() {
         try {
             long dataLen = tableMetaData.getDataLen();
@@ -102,6 +106,7 @@ public class SsTable implements Closeable {
             byte[] indexBytes = objectMapper.writeValueAsString(sparseIndex).getBytes(StandardCharsets.UTF_8);
             tableMetaData.setIndexStart(tableFile.getFilePointer());
             tableFile.write(indexBytes);
+            tableMetaData.setTotal(data.size());
             tableMetaData.setIndexLen(indexBytes.length);
             //保存文件索引
             tableMetaData.writeToFile(tableFile);

@@ -9,7 +9,14 @@ import java.util.Set;
 @Getter
 public class Index implements Serializable {
 
+    @Getter
+    private final String name;
+
     private final Set<String> columns = Sets.newHashSet();
+
+    public Index(String name) {
+        this.name = name;
+    }
 
     public void addColumn(String columnName) {
         this.columns.add(columnName);
