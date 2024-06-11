@@ -441,7 +441,7 @@ public class MemoryData extends AbstractData {
                     Column column = columnMap.get(fieldName);
                     Assert.notNull(column, fieldName + "参数不存在");
 
-                    String expCondition = this.getExpCondition(column, keyConditionValue, condition.getFieldValue(), condition.getConditionEnum(), part.getConditionArgument(), i++);
+                    String expCondition = super.getExpCondition(column, keyConditionValue, condition.getFieldValue(), condition.getConditionEnum(), part.getConditionArgument(), i++);
 
                     if (StrUtil.isNotBlank(fullExpression)) {
                         fullExpression.append(ConditionTypeEnum.AND.getExpression());
@@ -514,141 +514,7 @@ public class MemoryData extends AbstractData {
         return true;
     }
 
-    /**
-     * 构建表达式
-     *
-     * @param column
-     * @param keyConditionValue
-     * @param fieldValue
-     * @param conditionEnum
-     * @param target
-     * @param i
-     * @return
-     */
-    private String getExpCondition(Column column, Map<String, Set<Object>> keyConditionValue, Object fieldValue, ConditionEnum conditionEnum, Map<String, Object> target, int i) {
-        String name = column.getName();
-        String keyName = name + "$" + i;
-        StringBuilder conditionExp = new StringBuilder();
-        Convert<?> convert = super.getConvert(column.getColumnType());
-        conditionExp.append(SOURCE_PARAM_KEY).append(".").append(name);
 
-        if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-            keyConditionValue.computeIfAbsent(name, s -> new HashSet<>());
-        }
-
-        switch (conditionEnum) {
-            case EQ:
-                Object eqValue = convert.convert(fieldValue);
-
-                conditionExp.append("==").append(TARGET_PARAM_KEY).append(".").append(keyName);
-                target.put(keyName, eqValue);
-
-                if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-                    keyConditionValue.get(name).add(eqValue);
-                }
-
-                break;
-            case GT:
-                conditionExp.append("> ").append(TARGET_PARAM_KEY).append(".").append(keyName);
-                target.put(keyName, convert.convert(fieldValue));
-                break;
-            case GE:
-                conditionExp.append(">=").append(TARGET_PARAM_KEY).append(".").append(keyName);
-                target.put(keyName, convert.convert(fieldValue));
-                break;
-            case LE:
-                conditionExp.append("<=").append(TARGET_PARAM_KEY).append(".").append(keyName);
-                target.put(keyName, convert.convert(fieldValue));
-                break;
-            case LT:
-                conditionExp.append("< ").append(TARGET_PARAM_KEY).append(".").append(keyName);
-                target.put(keyName, convert.convert(fieldValue));
-                break;
-            case IN:
-                conditionExp.setLength(0);
-                conditionExp.append(" in (").append(SOURCE_PARAM_KEY).append(".").append(name).append(",").append(TARGET_PARAM_KEY).append(".").append(keyName).append(")");
-                if (!(fieldValue instanceof Collection)) {
-                    throw new IllegalArgumentException("in 操作需要使用集合类参数");
-                }
-
-                Collection<?> inCollection = (Collection<?>) fieldValue;
-                if (CollUtil.isEmpty(inCollection)) {
-                    throw new IllegalArgumentException("in 集合为空");
-                }
-
-                List<?> inCollect = inCollection.stream().map(convert::convert).collect(Collectors.toList());
-                target.put(keyName, inCollect);
-
-                if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-                    keyConditionValue.get(name).addAll(inCollect);
-                }
-
-                target.put(keyName, fieldValue);
-                break;
-            case NOT_IN:
-                conditionExp.setLength(0);
-                conditionExp.append(" notIn (").append(SOURCE_PARAM_KEY).append(".").append(name).append(",").append(TARGET_PARAM_KEY).append(".").append(keyName).append(")");
-                if (!(fieldValue instanceof Collection)) {
-                    throw new IllegalArgumentException("not in 操作需要使用集合类参数");
-                }
-
-                Collection<?> notInCollection = (Collection<?>) fieldValue;
-                if (CollUtil.isEmpty(notInCollection)) {
-                    throw new IllegalArgumentException("not in 集合为空");
-                }
-
-                List<?> notInCollect = notInCollection.stream().map(convert::convert).collect(Collectors.toList());
-                target.put(keyName, notInCollect);
-                break;
-            case NULL:
-                conditionExp.append("==nil");
-                break;
-            case NOT_NULL:
-                conditionExp.append("!=nil");
-                break;
-            case NE:
-                conditionExp.append("!=").append(TARGET_PARAM_KEY).append(".").append(keyName);
-                target.put(keyName, convert.convert(fieldValue));
-                break;
-            case NOT_LIKE:
-                conditionExp.setLength(0);
-                conditionExp.append("!string.contains(").append(SOURCE_PARAM_KEY).append(".").append(name).append(",").append(TARGET_PARAM_KEY).append(".").append(keyName).append(")");
-                target.put(keyName, this.likeValueHandler(fieldValue));
-                break;
-            case LIKE:
-                conditionExp.setLength(0);
-                conditionExp.append("string.contains(").append(SOURCE_PARAM_KEY).append(".").append(name).append(",").append(TARGET_PARAM_KEY).append(".").append(keyName).append(")");
-                target.put(keyName, this.likeValueHandler(fieldValue));
-                break;
-            default:
-                throw new SqlException("不支持查询条件");
-        }
-
-        return conditionExp.toString();
-    }
-
-
-    /**
-     * like字段处理，处理掉百分号
-     *
-     * @param value
-     * @return
-     */
-    private String likeValueHandler(Object value) {
-        Assert.notNull(value, "模糊查询值为空");
-
-        String like = value.toString().trim();
-        if (StrUtil.startWith(like, "%")) {
-            like = StrUtil.sub(like, 1, like.length());
-        }
-
-        if (StrUtil.endWith(like, "%")) {
-            like = StrUtil.sub(like, 0, like.length() - 1);
-        }
-
-        Assert.hasText(like, "模糊查询值为空");
-        return like;
-    }
 
     @Data
     private static class Route implements Serializable {
