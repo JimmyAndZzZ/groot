@@ -2,6 +2,7 @@ package com.jimmy.groot.engine.data;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.google.common.collect.Lists;
@@ -14,8 +15,12 @@ import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.metadata.Index;
 import com.jimmy.groot.platform.other.Assert;
+import com.jimmy.groot.sql.core.AggregateEnum;
+import com.jimmy.groot.sql.core.AggregateFunction;
+import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.enums.ColumnTypeEnum;
 import com.jimmy.groot.sql.enums.ConditionEnum;
+import com.jimmy.groot.sql.other.MapComparator;
 import lombok.Getter;
 
 import java.io.Serializable;
@@ -57,6 +62,41 @@ public abstract class AbstractData implements Data {
 
         Assert.isTrue(!partitionIndex.isEmpty(), "分区键为空");
         Assert.isTrue(!uniqueIndex.isEmpty(), "唯一键为空");
+    }
+
+    /**
+     * 聚合函数处理
+     *
+     * @param result
+     * @return
+     */
+    protected Collection<Map<String, Object>> aggregateHandler(Set<String> select, List<AggregateFunction> aggregateFunctions, Collection<Map<String, Object>> result) {
+        if (CollUtil.isEmpty(result)) {
+            return result;
+        }
+
+        if (CollUtil.isEmpty(aggregateFunctions)) {
+            return result;
+        }
+
+        Map<String, Object> doc = Maps.newHashMap();
+
+        for (AggregateFunction aggregateFunction : aggregateFunctions) {
+            doc.put(aggregateFunction.getAlias(), this.aggregateCalculate(result, aggregateFunction.getAggregateType(), aggregateFunction.getColumn()));
+        }
+
+        if (CollUtil.isEmpty(select)) {
+            return Lists.newArrayList(doc);
+        }
+
+        return result.stream().map(map -> {
+            Map<String, Object> data = Maps.newHashMap(doc);
+            for (String s : select) {
+                data.put(s, map.get(s));
+            }
+
+            return data;
+        }).collect(Collectors.toList());
     }
 
     /**
@@ -320,6 +360,31 @@ public abstract class AbstractData implements Data {
 
         Assert.hasText(like, "模糊查询值为空");
         return like;
+    }
+
+    /**
+     * 获取聚合计算结果
+     *
+     * @param result
+     * @param aggregateEnum
+     * @param name
+     * @return
+     */
+    private Object aggregateCalculate(Collection<Map<String, Object>> result, AggregateEnum aggregateEnum, String name) {
+        switch (aggregateEnum) {
+            case COUNT:
+                return result.size();
+            case MAX:
+                return result.stream().filter(map -> map.get(name) != null).max(new MapComparator(name)).get().get(name);
+            case MIN:
+                return result.stream().filter(map -> map.get(name) != null).min(new MapComparator(name)).get().get(name);
+            case AVG:
+                return result.stream().filter(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name)) != null).mapToDouble(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name))).average().orElse(0D);
+            case SUM:
+                return result.stream().filter(map -> map.get(name) != null).mapToDouble(map -> NumberUtil.parseDouble(map.get(name) != null ? map.get(name).toString() : StrUtil.EMPTY)).sum();
+        }
+
+        return null;
     }
 
     @Getter

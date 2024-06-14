@@ -18,6 +18,7 @@ import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.metadata.Index;
 import com.jimmy.groot.engine.metadata.Row;
+import com.jimmy.groot.sql.core.AggregateFunction;
 import com.jimmy.groot.sql.core.Condition;
 import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.element.ConditionElement;
@@ -70,7 +71,7 @@ public class LsmData extends AbstractData {
         lsmData.objectMapper = new ObjectMapper();
         lsmData.partitions = Maps.newConcurrentMap();
         lsmData.columnMap = columns.stream().collect(Collectors.toMap(Column::getName, g -> g));
-        lsmData.uniqueStore = LsmStore.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH + lsmData.uniqueIndex.getName() + StrUtil.SLASH, storeThreshold, partSize, expectCount);
+        lsmData.uniqueStore = LsmStore.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH + lsmData.uniqueIndex.getName() + StrUtil.SLASH, storeThreshold, partSize, expectCount)
         return lsmData;
     }
 
@@ -126,91 +127,116 @@ public class LsmData extends AbstractData {
     @Override
     public Collection<Map<String, Object>> query(QueryElement queryElement) {
         try {
-            int end = queryElement.getEnd();
-            int start = queryElement.getStart();
-            Set<String> select = queryElement.getSelect();
-            boolean isFindAll = queryElement.isSelectAll();
-            boolean allColumn = queryElement.isAllColumn();
-            boolean withoutCondition = queryElement.isWithoutCondition();
-            Set<String> needColumnNames = queryElement.getNeedColumnNames();
-            ConditionElement conditionElement = queryElement.getConditionElement();
-
-            long sum = partitions.values().stream().mapToLong(LsmStore::total).sum();
-            if (start >= sum) {
+            Collection<Map<String, Object>> maps = this.queryList(queryElement);
+            if (CollUtil.isEmpty(maps)) {
                 return Lists.newArrayList();
             }
-            //无条件查询
-            if (withoutCondition) {
-                if (MapUtil.isEmpty(partitions)) {
-                    return Lists.newArrayList();
-                }
 
-                return this.withoutCondition(isFindAll, start, end, select, allColumn);
-            }
-            //根据条件查询
-            List<Condition> conditions = conditionElement.getConditions();
-            Collection<String> uniqueCodes = conditionElement.getUniqueCodes();
-            Collection<String> partitionCodes = conditionElement.getPartitionCodes();
-            if (CollUtil.isEmpty(partitionCodes)) {
-                throw new SqlException("select partition fail");
+            Set<String> select = queryElement.getSelect();
+            List<AggregateFunction> aggregateFunctions = queryElement.getAggregateFunctions();
+
+            if (CollUtil.isNotEmpty(aggregateFunctions)) {
+                return super.aggregateHandler(select, aggregateFunctions, maps);
             }
 
-            int i = 0;
-            List<Map<String, Object>> result = Lists.newArrayList();
-
-            if (CollUtil.isNotEmpty(uniqueCodes)) {
-                if (!isFindAll) {
-                    for (String uniqueCode : uniqueCodes) {
-                        String s = uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX);
-                        if (StrUtil.isEmpty(uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX))) {
-                            uniqueCodes.remove(s);
-                        }
-                    }
-
-                    if (end > uniqueCodes.size()) {
-                        return Lists.newArrayList();
-                    }
-
-                    uniqueCodes = CollUtil.sub(uniqueCodes, start, end);
-                }
-
-                for (String uniqueCode : uniqueCodes) {
-                    Map<String, Object> data = this.uniqueCodeToData(uniqueCode, needColumnNames, allColumn);
-                    if (data != null) {
-                        if (CollUtil.isNotEmpty(conditions)) {
-                            ConditionExpression conditionExp = this.getConditionExp(conditions);
-
-                            if (this.filter(data, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
-                                result.add(super.columnFilter(data, select));
-                            }
-                        } else {
-                            result.add(super.columnFilter(data, select));
-                        }
-                    }
-                }
-            } else {
-                Collection<Map<String, Object>> maps = this.withoutCondition(isFindAll, start, end, select, allColumn);
-
-                if (CollUtil.isNotEmpty(maps)) {
-                    for (Map<String, Object> map : maps) {
-                        if (CollUtil.isNotEmpty(conditions)) {
-                            ConditionExpression conditionExp = this.getConditionExp(conditions);
-
-                            if (this.filter(map, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
-                                result.add(super.columnFilter(map, select));
-                            }
-                        } else {
-                            result.add(super.columnFilter(map, select));
-                        }
-                    }
-                }
+            if (CollUtil.isEmpty(select)) {
+                return maps;
             }
 
-            return isFindAll ? result : CollUtil.sub(result, start, end);
+            return maps.stream().map(map -> super.columnFilter(map, select)).collect(Collectors.toList());
         } catch (Exception e) {
             log.error("查询失败", e);
             throw new SqlException("select fail:" + e.getMessage());
         }
+    }
+
+    /**
+     * 查询数据
+     *
+     * @param queryElement
+     * @return
+     */
+    public Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception {
+        int end = queryElement.getEnd();
+        int start = queryElement.getStart();
+        boolean isFindAll = queryElement.isSelectAll();
+        boolean allColumn = queryElement.isAllColumn();
+        boolean withoutCondition = queryElement.isWithoutCondition();
+        Set<String> needColumnNames = queryElement.getNeedColumnNames();
+        ConditionElement conditionElement = queryElement.getConditionElement();
+
+        long sum = partitions.values().stream().mapToLong(LsmStore::total).sum();
+        if (start >= sum) {
+            return Lists.newArrayList();
+        }
+        //无条件查询
+        if (withoutCondition) {
+            if (MapUtil.isEmpty(partitions)) {
+                return Lists.newArrayList();
+            }
+
+            return this.withoutCondition(isFindAll, start, end, needColumnNames, allColumn);
+        }
+        //根据条件查询
+        List<Condition> conditions = conditionElement.getConditions();
+        Collection<String> uniqueCodes = conditionElement.getUniqueCodes();
+        Collection<String> partitionCodes = conditionElement.getPartitionCodes();
+        if (CollUtil.isEmpty(partitionCodes)) {
+            throw new SqlException("select partition fail");
+        }
+
+        int i = 0;
+        List<Map<String, Object>> result = Lists.newArrayList();
+
+        if (CollUtil.isNotEmpty(uniqueCodes)) {
+            if (!isFindAll) {
+                for (String uniqueCode : uniqueCodes) {
+                    String s = uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX);
+                    if (StrUtil.isEmpty(uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX))) {
+                        uniqueCodes.remove(s);
+                    }
+                }
+
+                if (end > uniqueCodes.size()) {
+                    return Lists.newArrayList();
+                }
+
+                uniqueCodes = CollUtil.sub(uniqueCodes, start, end);
+            }
+
+            for (String uniqueCode : uniqueCodes) {
+                Map<String, Object> data = this.uniqueCodeToData(uniqueCode, needColumnNames, allColumn);
+                if (data != null) {
+                    if (CollUtil.isNotEmpty(conditions)) {
+                        ConditionExpression conditionExp = this.getConditionExp(conditions);
+
+                        if (this.filter(data, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
+                            result.add(data);
+                        }
+                    } else {
+                        result.add(data);
+                    }
+                }
+            }
+        } else {
+            Collection<Map<String, Object>> maps = this.withoutCondition(isFindAll, start, end, needColumnNames, allColumn);
+
+            if (CollUtil.isNotEmpty(maps)) {
+                for (Map<String, Object> map : maps) {
+                    if (CollUtil.isNotEmpty(conditions)) {
+                        ConditionExpression conditionExp = this.getConditionExp(conditions);
+
+                        if (this.filter(map, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
+                            result.add(map);
+                        }
+                    } else {
+                        result.add(map);
+                    }
+                }
+            }
+        }
+
+        return isFindAll ? result : CollUtil.sub(result, start, end);
     }
 
     /**
