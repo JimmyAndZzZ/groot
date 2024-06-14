@@ -100,6 +100,17 @@ public abstract class AbstractData implements Data {
     }
 
     /**
+     * 填充数据
+     *
+     * @param records
+     * @param data
+     */
+    protected void putRecords(Map<String, Map<String, Object>> records, Map<String, Object> data) {
+        IndexData indexData = this.getIndexData(data, this.uniqueIndex);
+        records.put(indexData.key, data);
+    }
+
+    /**
      * select 字段过滤
      *
      * @param data
@@ -225,39 +236,21 @@ public abstract class AbstractData implements Data {
 
 
     /**
-     * 获取分区键key
+     * 获取索引key
      *
      * @param doc
      * @return
      */
-    protected IndexData getPartitionData(Map<String, Object> doc) {
-        Map<String, Object> partitionData = Maps.newHashMap();
+    protected IndexData getIndexData(Map<String, Object> doc, Index index) {
+        Map<String, Object> indexData = Maps.newHashMap();
 
-        for (String column : partitionIndex.getColumns()) {
+        for (String column : index.getColumns()) {
             Object o = doc.get(column);
-            Assert.notNull(o, "分区键值为空，字段名:" + column);
-            partitionData.put(column, o);
+            Assert.notNull(o, index.getName() + "值为空，字段名:" + column);
+            indexData.put(column, o);
         }
 
-        return new IndexData(this.getKey(partitionData), partitionData);
-    }
-
-    /**
-     * 获取唯一键key
-     *
-     * @param doc
-     * @return
-     */
-    protected IndexData getUniqueData(Map<String, Object> doc) {
-        Map<String, Object> uniqueData = Maps.newHashMap();
-
-        for (String column : uniqueIndex.getColumns()) {
-            Object o = doc.get(column);
-            Assert.notNull(o, "主键值为空，字段名:" + column);
-            uniqueData.put(column, o);
-        }
-
-        return new IndexData(this.getKey(uniqueData), uniqueData);
+        return new IndexData(this.getKey(indexData), indexData);
     }
 
     /**

@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
@@ -78,8 +79,8 @@ public class LsmData extends AbstractData {
     @Override
     public void save(Map<String, Object> doc) {
         try {
-            IndexData uniqueData = super.getUniqueData(doc);
-            IndexData partitionData = super.getPartitionData(doc);
+            IndexData uniqueData = super.getIndexData(doc, super.uniqueIndex);
+            IndexData partitionData = super.getIndexData(doc, super.partitionIndex);
 
             String uniqueDataKey = uniqueData.getKey();
             String partitionDataKey = partitionData.getKey();
@@ -121,7 +122,7 @@ public class LsmData extends AbstractData {
 
     @Override
     public void remove(Map<String, Object> doc) {
-        uniqueStore.remove(super.getUniqueData(doc).getKey() + KEY_ROW_SUFFIX);
+        uniqueStore.remove(super.getIndexData(doc, super.uniqueIndex).getKey() + KEY_ROW_SUFFIX);
     }
 
     @Override
@@ -156,27 +157,129 @@ public class LsmData extends AbstractData {
      * @param queryElement
      * @return
      */
-    public Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception {
+    private Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception {
         int end = queryElement.getEnd();
         int start = queryElement.getStart();
         boolean isFindAll = queryElement.isSelectAll();
         boolean allColumn = queryElement.isAllColumn();
         boolean withoutCondition = queryElement.isWithoutCondition();
         Set<String> needColumnNames = queryElement.getNeedColumnNames();
-        ConditionElement conditionElement = queryElement.getConditionElement();
+        List<ConditionElement> conditionElements = queryElement.getConditionElements();
 
         long sum = partitions.values().stream().mapToLong(LsmStore::total).sum();
         if (start >= sum) {
             return Lists.newArrayList();
         }
         //无条件查询
-        if (withoutCondition) {
+        if (withoutCondition || CollUtil.isEmpty(conditionElements)) {
             if (MapUtil.isEmpty(partitions)) {
                 return Lists.newArrayList();
             }
 
             return this.withoutCondition(isFindAll, start, end, needColumnNames, allColumn);
         }
+
+        AtomicInteger total = new AtomicInteger(0);
+        Map<String, Map<String, Object>> records = Maps.newHashMap();
+        Collection<Map<String, Object>> allData = Lists.newArrayList();
+
+        for (ConditionElement conditionElement : conditionElements) {
+            Set<String> uniqueCodes = conditionElement.getUniqueCodes();
+
+            if (CollUtil.isNotEmpty(uniqueCodes)) {
+                this.queryByUnique(conditionElement,
+                        records,
+                        isFindAll,
+                        start,
+                        end,
+                        total,
+                        allColumn,
+                        needColumnNames);
+            } else {
+                if (CollUtil.isEmpty(allData)) {
+                    allData.addAll(this.withoutCondition(true,
+                            start,
+                            end,
+                            needColumnNames,
+                            allColumn));
+                }
+
+                if (CollUtil.isEmpty(allData)) {
+                    return Lists.newArrayList();
+                }
+
+                this.queryAll(conditionElement,
+                        records,
+                        isFindAll,
+                        start,
+                        end,
+                        total,
+                        allData);
+            }
+
+            if (total.get() >= end) {
+                break;
+            }
+        }
+
+        return CollUtil.sub(records.values(), start, end);
+    }
+
+    /**
+     * 查询所有
+     *
+     * @param conditionElement
+     * @param records
+     * @param isFindAll
+     * @param end
+     * @param total
+     * @param allData
+     */
+    private void queryAll(ConditionElement conditionElement,
+                          Map<String, Map<String, Object>> records,
+                          boolean isFindAll,
+                          int start,
+                          int end,
+                          AtomicInteger total,
+                          Collection<Map<String, Object>> allData) {
+
+        List<Condition> conditions = conditionElement.getConditions();
+
+        for (Map<String, Object> data : allData) {
+            if (!isFindAll && total.get() > end) {
+                break;
+            }
+
+            IndexData indexData = super.getIndexData(data, super.uniqueIndex);
+
+            if (records.containsKey(indexData.getKey())) {
+                continue;
+            }
+
+            this.put(conditions, data, total, records, start);
+        }
+    }
+
+    /**
+     * 根据主键查询
+     *
+     * @param conditionElement
+     * @param records
+     * @param isFindAll
+     * @param end
+     * @param total
+     * @param allColumn
+     * @param needColumnNames
+     * @throws Exception
+     */
+    private void queryByUnique(ConditionElement conditionElement,
+                               Map<String, Map<String, Object>> records,
+                               boolean isFindAll,
+                               int start,
+                               int end,
+                               AtomicInteger total,
+                               boolean allColumn,
+                               Set<String> needColumnNames) throws Exception {
         //根据条件查询
         List<Condition> conditions = conditionElement.getConditions();
         Collection<String> uniqueCodes = conditionElement.getUniqueCodes();
@@ -185,59 +288,61 @@ public class LsmData extends AbstractData {
             throw new SqlException("select partition fail");
         }
 
-        int i = 0;
-        List<Map<String, Object>> result = Lists.newArrayList();
-
-        if (CollUtil.isNotEmpty(uniqueCodes)) {
-            if (!isFindAll) {
-                for (String uniqueCode : uniqueCodes) {
-                    String s = uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX);
-                    if (StrUtil.isEmpty(uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX))) {
-                        uniqueCodes.remove(s);
-                    }
+        if (!isFindAll) {
+            for (String uniqueCode : uniqueCodes) {
+                String s = uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX);
+                if (StrUtil.isEmpty(uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX)) || records.containsKey(uniqueCode)) {
+                    uniqueCodes.remove(s);
                 }
-
-                if (end > uniqueCodes.size()) {
-                    return Lists.newArrayList();
-                }
-
-                uniqueCodes = CollUtil.sub(uniqueCodes, start, end);
             }
 
-            for (String uniqueCode : uniqueCodes) {
-                Map<String, Object> data = this.uniqueCodeToData(uniqueCode, needColumnNames, allColumn);
-                if (data != null) {
-                    if (CollUtil.isNotEmpty(conditions)) {
-                        ConditionExpression conditionExp = this.getConditionExp(conditions);
+            if (CollUtil.isEmpty(uniqueCodes)) {
+                return;
+            }
 
-                        if (this.filter(data, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
-                            result.add(data);
-                        }
-                    } else {
-                        result.add(data);
-                    }
+            int andAdd = total.getAndAdd(uniqueCodes.size());
+            uniqueCodes = CollUtil.sub(uniqueCodes, andAdd, end);
+        }
+
+        for (String uniqueCode : uniqueCodes) {
+            Map<String, Object> data = this.uniqueCodeToData(uniqueCode, needColumnNames, allColumn);
+            if (data != null) {
+                this.put(conditions, data, total, records, start);
+            }
+        }
+    }
+
+    /**
+     * 填充数据
+     *
+     * @param conditions
+     * @param data
+     * @param total
+     * @param records
+     * @param start
+     */
+    private void put(List<Condition> conditions,
+                     Map<String, Object> data,
+                     AtomicInteger total,
+                     Map<String, Map<String, Object>> records,
+                     int start) {
+        if (CollUtil.isNotEmpty(conditions)) {
+            ConditionExpression conditionExp = this.getConditionExp(conditions);
+
+            if (this.filter(data, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
+                int i = total.incrementAndGet();
+                if (i > start) {
+                    super.putRecords(records, data);
                 }
             }
         } else {
-            Collection<Map<String, Object>> maps = this.withoutCondition(isFindAll, start, end, needColumnNames, allColumn);
-
-            if (CollUtil.isNotEmpty(maps)) {
-                for (Map<String, Object> map : maps) {
-                    if (CollUtil.isNotEmpty(conditions)) {
-                        ConditionExpression conditionExp = this.getConditionExp(conditions);
-
-                        if (this.filter(map, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
-                            result.add(map);
-                        }
-                    } else {
-                        result.add(map);
-                    }
-                }
+            int i = total.incrementAndGet();
+            if (i > start) {
+                super.putRecords(records, data);
             }
         }
-
-        return isFindAll ? result : CollUtil.sub(result, start, end);
     }
+
 
     /**
      * 过滤数据
@@ -289,7 +394,11 @@ public class LsmData extends AbstractData {
      *
      * @return
      */
-    private Collection<Map<String, Object>> withoutCondition(boolean isFindAll, int start, int end, Set<String> needColumnNames, boolean isAllColumn) throws Exception {
+    private Collection<Map<String, Object>> withoutCondition(boolean isFindAll,
+                                                             int start,
+                                                             int end,
+                                                             Set<String> needColumnNames,
+                                                             boolean isAllColumn) throws Exception {
         int i = 0;
         List<Map<String, Object>> result = Lists.newArrayList();
 
