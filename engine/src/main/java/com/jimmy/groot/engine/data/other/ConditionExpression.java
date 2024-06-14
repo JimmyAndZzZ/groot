@@ -15,5 +15,4 @@ public class ConditionExpression implements Serializable {
 
     private Map<String, Object> conditionArgument = Maps.newHashMap();
 
-    private Map<String, Set<Object>> keyConditionValue = Maps.newHashMap();
 }

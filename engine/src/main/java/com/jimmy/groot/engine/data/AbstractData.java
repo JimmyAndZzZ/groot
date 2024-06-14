@@ -7,6 +7,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.base.Data;
 import com.jimmy.groot.engine.convert.DateConvert;
@@ -18,15 +19,12 @@ import com.jimmy.groot.engine.metadata.Index;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.core.AggregateEnum;
 import com.jimmy.groot.sql.core.AggregateFunction;
-import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.element.QueryElement;
 import com.jimmy.groot.sql.enums.ColumnTypeEnum;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.other.MapComparator;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,18 +40,17 @@ public abstract class AbstractData implements Data {
 
     protected Index partitionIndex;
 
-    protected List<Column> columns;
+    protected Map<String, Column> columnMap;
 
     public AbstractData(List<Column> columns) {
-        this.columns = columns;
-        this.converts.put(ColumnTypeEnum.DATE, new DateConvert());
-
-        this.columns = columns;
         this.uniqueIndex = new Index("unique key");
         this.partitionIndex = new Index("partition key");
+        this.converts.put(ColumnTypeEnum.DATE, new DateConvert());
 
         for (Column column : columns) {
             String name = column.getName();
+
+            this.columnMap.put(name, column);
 
             if (column.getIsPartitionKey()) {
                 partitionIndex.addColumn(name);
@@ -94,6 +91,21 @@ public abstract class AbstractData implements Data {
             log.error("查询失败", e);
             throw new SqlException("select fail:" + e.getMessage());
         }
+    }
+
+    /**
+     * 过滤数据
+     *
+     * @param d
+     * @param conditionArgument
+     * @param expression
+     * @return
+     */
+    protected boolean filter(Map<String, Object> d, Map<String, Object> conditionArgument, Expression expression) {
+        Map<String, Object> param = Maps.newHashMap();
+        param.put(SOURCE_PARAM_KEY, d);
+        param.put(TARGET_PARAM_KEY, conditionArgument);
+        return cn.hutool.core.convert.Convert.toBool(expression.execute(param), false);
     }
 
     /**
@@ -157,23 +169,22 @@ public abstract class AbstractData implements Data {
      * 构建表达式
      *
      * @param column
-     * @param keyConditionValue
      * @param fieldValue
      * @param conditionEnum
      * @param target
      * @param i
      * @return
      */
-    protected String getExpCondition(Column column, Map<String, Set<Object>> keyConditionValue, Object fieldValue, ConditionEnum conditionEnum, Map<String, Object> target, int i) {
+    protected String getExpCondition(Column column,
+                                     Object fieldValue,
+                                     ConditionEnum conditionEnum,
+                                     Map<String, Object> target,
+                                     int i) {
         String name = column.getName();
         String keyName = name + "$" + i;
         StringBuilder conditionExp = new StringBuilder();
         Convert<?> convert = this.getConvert(column.getColumnType());
         conditionExp.append(SOURCE_PARAM_KEY).append(".").append(name);
-
-        if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-            keyConditionValue.computeIfAbsent(name, s -> new HashSet<>());
-        }
 
         switch (conditionEnum) {
             case EQ:
@@ -181,11 +192,6 @@ public abstract class AbstractData implements Data {
 
                 conditionExp.append("==").append(TARGET_PARAM_KEY).append(".").append(keyName);
                 target.put(keyName, eqValue);
-
-                if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-                    keyConditionValue.get(name).add(eqValue);
-                }
-
                 break;
             case GT:
                 conditionExp.append("> ").append(TARGET_PARAM_KEY).append(".").append(keyName);
@@ -217,12 +223,6 @@ public abstract class AbstractData implements Data {
 
                 List<?> inCollect = inCollection.stream().map(convert::convert).collect(Collectors.toList());
                 target.put(keyName, inCollect);
-
-                if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-                    keyConditionValue.get(name).addAll(inCollect);
-                }
-
-                target.put(keyName, fieldValue);
                 break;
             case NOT_IN:
                 conditionExp.setLength(0);

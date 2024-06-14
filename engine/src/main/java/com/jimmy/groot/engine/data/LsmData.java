@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.googlecode.aviator.AviatorEvaluator;
-import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.data.lsm.LsmStore;
 import com.jimmy.groot.engine.data.other.ConditionExpression;
@@ -16,7 +15,6 @@ import com.jimmy.groot.engine.data.other.IndexData;
 import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.metadata.Row;
-import com.jimmy.groot.sql.core.AggregateFunction;
 import com.jimmy.groot.sql.core.Condition;
 import com.jimmy.groot.sql.element.ConditionElement;
 import com.jimmy.groot.sql.element.QueryElement;
@@ -26,10 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-
-import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
-import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
 @Slf4j
 public class LsmData extends AbstractData {
@@ -50,8 +44,6 @@ public class LsmData extends AbstractData {
 
     private ObjectMapper objectMapper;
 
-    private Map<String, Column> columnMap;
-
     private ConcurrentMap<String, LsmStore> partitions;
 
     private LsmData(List<Column> columns) {
@@ -67,7 +59,6 @@ public class LsmData extends AbstractData {
         lsmData.storeThreshold = storeThreshold;
         lsmData.objectMapper = new ObjectMapper();
         lsmData.partitions = Maps.newConcurrentMap();
-        lsmData.columnMap = columns.stream().collect(Collectors.toMap(Column::getName, g -> g));
         lsmData.uniqueStore = LsmStore.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH + lsmData.uniqueIndex.getName() + StrUtil.SLASH, storeThreshold, partSize, expectCount);
         return lsmData;
     }
@@ -96,7 +87,7 @@ public class LsmData extends AbstractData {
                 String key = entry.getKey();
                 Object value = entry.getValue();
 
-                Column column = columnMap.get(key);
+                Column column = super.columnMap.get(key);
                 if (column == null) {
                     throw new SqlException(key + "表字段不存在");
                 }
@@ -182,12 +173,12 @@ public class LsmData extends AbstractData {
                         allData);
             }
 
-            if (total.get() >= end) {
+            if (!isFindAll && total.get() >= end) {
                 break;
             }
         }
 
-        return CollUtil.sub(records.values(), start, end);
+        return isFindAll ? records.values() : CollUtil.sub(records.values(), 0, end - start);
     }
 
     /**
@@ -245,7 +236,6 @@ public class LsmData extends AbstractData {
                                AtomicInteger total,
                                boolean allColumn,
                                Set<String> needColumnNames) throws Exception {
-        //根据条件查询
         List<Condition> conditions = conditionElement.getConditions();
         Collection<String> uniqueCodes = conditionElement.getUniqueCodes();
         Collection<String> partitionCodes = conditionElement.getPartitionCodes();
@@ -254,12 +244,7 @@ public class LsmData extends AbstractData {
         }
 
         if (!isFindAll) {
-            for (String uniqueCode : uniqueCodes) {
-                String s = uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX);
-                if (StrUtil.isEmpty(uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX)) || records.containsKey(uniqueCode)) {
-                    uniqueCodes.remove(s);
-                }
-            }
+            uniqueCodes.removeIf(uniqueCode -> StrUtil.isEmpty(uniqueStore.get(uniqueCode + KEY_ROW_SUFFIX)) || records.containsKey(uniqueCode));
 
             if (CollUtil.isEmpty(uniqueCodes)) {
                 return;
@@ -294,7 +279,7 @@ public class LsmData extends AbstractData {
         if (CollUtil.isNotEmpty(conditions)) {
             ConditionExpression conditionExp = this.getConditionExp(conditions);
 
-            if (this.filter(data, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
+            if (super.filter(data, conditionExp.getConditionArgument(), conditionExp.getExpression())) {
                 int i = total.incrementAndGet();
                 if (i > start) {
                     super.putRecords(records, data);
@@ -310,21 +295,6 @@ public class LsmData extends AbstractData {
 
 
     /**
-     * 过滤数据
-     *
-     * @param d
-     * @param conditionArgument
-     * @param expression
-     * @return
-     */
-    private boolean filter(Map<String, Object> d, Map<String, Object> conditionArgument, Expression expression) {
-        Map<String, Object> param = Maps.newHashMap();
-        param.put(SOURCE_PARAM_KEY, d);
-        param.put(TARGET_PARAM_KEY, conditionArgument);
-        return cn.hutool.core.convert.Convert.toBool(expression.execute(param), false);
-    }
-
-    /**
      * 获取条件表达式
      *
      * @param conditions
@@ -336,11 +306,12 @@ public class LsmData extends AbstractData {
         ConditionExpression conditionExpression = new ConditionExpression();
 
         for (Condition condition : conditions) {
-            String fieldName = condition.getFieldName();
-
-            Column column = columnMap.get(fieldName);
-
-            String expCondition = super.getExpCondition(column, conditionExpression.getKeyConditionValue(), condition.getFieldValue(), condition.getConditionEnum(), conditionExpression.getConditionArgument(), i++);
+            String expCondition = super.getExpCondition(
+                    super.columnMap.get(condition.getFieldName()),
+                    condition.getFieldValue(),
+                    condition.getConditionEnum(),
+                    conditionExpression.getConditionArgument(),
+                    i++);
 
             if (StrUtil.isNotBlank(expression)) {
                 expression.append(ConditionTypeEnum.AND.getExpression());
@@ -412,7 +383,7 @@ public class LsmData extends AbstractData {
 
         Map<String, Object> data = Maps.newHashMap();
 
-        for (Column column : columns) {
+        for (Column column : super.columnMap.values()) {
             String name = column.getName();
 
             if (!isAllColumn && !needColumnNames.contains(name)) {
