@@ -178,6 +178,37 @@ public class MemoryData extends AbstractData {
         return isFindAll ? records.values() : CollUtil.sub(records.values(), 0, end - start);
     }
 
+    @Override
+    protected Map<String, Object> uniqueKeyToData(String partitionKey, String uniqueKey, Set<String> needColumnNames, boolean isAllColumn) throws Exception {
+        MemoryPartition memoryPartition = partitions.get(partitionKey);
+        if (memoryPartition == null) {
+            return null;
+        }
+
+        MemoryFragment fragmentByUniqueCode = memoryPartition.getFragmentByUniqueCode(uniqueKey);
+        if (fragmentByUniqueCode == null) {
+            return null;
+        }
+
+        Map<String, Object> data = fragmentByUniqueCode.getData();
+        return isAllColumn ? data : super.columnFilter(data, needColumnNames);
+    }
+
+    @Override
+    protected Map<String, Object> uniqueKeyToUniqueData(String partitionKey, String uniqueKey) throws Exception {
+        MemoryPartition memoryPartition = partitions.get(partitionKey);
+        if (memoryPartition == null) {
+            return null;
+        }
+
+        MemoryFragment fragmentByUniqueCode = memoryPartition.getFragmentByUniqueCode(uniqueKey);
+        if (fragmentByUniqueCode == null) {
+            return null;
+        }
+
+        return fragmentByUniqueCode.getKey();
+    }
+
     /**
      * 查询所有数据
      *
@@ -199,7 +230,7 @@ public class MemoryData extends AbstractData {
                           AtomicInteger total,
                           boolean allColumn,
                           Set<String> needColumnNames,
-                          MemoryPartition memoryPartition) {
+                          MemoryPartition memoryPartition) throws Exception {
         //数据反序列化
         Collection<Map<String, Object>> allData = memoryPartition.getFragments().stream().map(MemoryFragment::getData).collect(Collectors.toList());
 
@@ -210,11 +241,20 @@ public class MemoryData extends AbstractData {
 
             IndexData indexData = super.getIndexData(data, super.uniqueIndex);
 
-            if (records.containsKey(indexData.getKey())) {
+            String uniqueKey = indexData.getKey();
+
+            if (records.containsKey(uniqueKey)) {
                 continue;
             }
 
-            this.put(conditionExpression, allColumn ? data : super.columnFilter(data, needColumnNames), total, records, start);
+            super.filterAndPut(conditionExpression,
+                    uniqueKey,
+                    memoryPartition.getCode(),
+                    total,
+                    records,
+                    isFindAll ? 0 : start,
+                    needColumnNames,
+                    allColumn);
         }
     }
 
@@ -241,7 +281,7 @@ public class MemoryData extends AbstractData {
                                int end,
                                AtomicInteger total,
                                boolean allColumn,
-                               Set<String> needColumnNames) {
+                               Set<String> needColumnNames) throws Exception {
         if (!isFindAll) {
             uniqueCodes.removeIf(uniqueCode -> memoryPartition.getFragmentByUniqueCode(uniqueCode) == null || records.containsKey(uniqueCode));
 
@@ -256,33 +296,18 @@ public class MemoryData extends AbstractData {
         for (String uniqueCode : uniqueCodes) {
             Map<String, Object> data = memoryPartition.getFragmentByUniqueCode(uniqueCode).getData();
             if (data != null) {
-                this.put(conditionExpression, allColumn ? data : super.columnFilter(data, needColumnNames), total, records, start);
+                super.filterAndPut(conditionExpression,
+                        uniqueCode,
+                        memoryPartition.getCode(),
+                        total,
+                        records,
+                        isFindAll ? 0 : start,
+                        needColumnNames,
+                        allColumn);
             }
         }
     }
 
-
-    /**
-     * 填充数据
-     *
-     * @param conditionExpression
-     * @param data
-     * @param total
-     * @param records
-     * @param start
-     */
-    private void put(ConditionExpression conditionExpression,
-                     Map<String, Object> data,
-                     AtomicInteger total,
-                     Map<String, Map<String, Object>> records,
-                     int start) {
-        if (super.filter(data, conditionExpression.getConditionArgument(), conditionExpression.getExpression())) {
-            int i = total.incrementAndGet();
-            if (i > start) {
-                super.putRecords(records, data);
-            }
-        }
-    }
 
     /**
      * 获取条件所有表达式
@@ -292,21 +317,29 @@ public class MemoryData extends AbstractData {
      */
     private ConditionExpression getConditionCollect(List<ConditionElement> conditionElements) {
         int i = 0;
-        StringBuilder conditionExp = new StringBuilder();
+        StringBuilder parentOtherExpression = new StringBuilder();
+        StringBuilder parentUniqueExpression = new StringBuilder();
         ConditionExpression conditionExpression = new ConditionExpression();
 
         for (ConditionElement conditionElement : conditionElements) {
             List<Condition> conditions = conditionElement.getConditions();
             if (CollUtil.isNotEmpty(conditions)) {
-                StringBuilder expression = new StringBuilder();
+                StringBuilder childOtherExpression = new StringBuilder();
+                StringBuilder childUniqueExpression = new StringBuilder();
 
                 for (Condition condition : conditions) {
+                    Column column = super.columnMap.get(condition.getFieldName());
+
+                    Boolean isUniqueKey = column.getIsUniqueKey();
+
                     String expCondition = super.getExpCondition(
-                            super.columnMap.get(condition.getFieldName()),
+                            column,
                             condition.getFieldValue(),
                             condition.getConditionEnum(),
-                            conditionExpression.getConditionArgument(),
+                            isUniqueKey ? conditionExpression.getUniqueConditionArgument() : conditionExpression.getOtherConditionArgument(),
                             i++);
+
+                    StringBuilder expression = isUniqueKey ? childUniqueExpression : childOtherExpression;
 
                     if (StrUtil.isNotBlank(expression)) {
                         expression.append(ConditionTypeEnum.AND.getExpression());
@@ -315,15 +348,32 @@ public class MemoryData extends AbstractData {
                     expression.append(expCondition);
                 }
 
-                if (StrUtil.isNotBlank(conditionExp)) {
-                    conditionExp.append(ConditionTypeEnum.OR.getExpression());
+                if (StrUtil.isNotBlank(childOtherExpression)) {
+                    if (StrUtil.isNotBlank(parentOtherExpression)) {
+                        parentOtherExpression.append(ConditionTypeEnum.OR.getExpression());
+                    }
+
+                    parentOtherExpression.append("(").append(childOtherExpression).append(")");
                 }
 
-                conditionExp.append("(").append(expression).append(")");
+                if (StrUtil.isNotBlank(childUniqueExpression)) {
+                    if (StrUtil.isNotBlank(parentUniqueExpression)) {
+                        parentUniqueExpression.append(ConditionTypeEnum.OR.getExpression());
+                    }
+
+                    parentUniqueExpression.append("(").append(childUniqueExpression).append(")");
+                }
             }
         }
 
-        conditionExpression.setExpression(AviatorEvaluator.compile(conditionExp.toString()));
+        if (StrUtil.isNotBlank(parentOtherExpression)) {
+            conditionExpression.setOtherExpression(AviatorEvaluator.compile(parentOtherExpression.toString()));
+        }
+
+        if (StrUtil.isNotBlank(parentUniqueExpression)) {
+            conditionExpression.setUniqueExpression(AviatorEvaluator.compile(parentUniqueExpression.toString()));
+        }
+
         return conditionExpression;
     }
 

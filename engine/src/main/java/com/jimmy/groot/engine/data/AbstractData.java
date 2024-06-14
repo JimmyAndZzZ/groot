@@ -7,11 +7,13 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.googlecode.aviator.AviatorEvaluator;
 import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.base.Data;
 import com.jimmy.groot.engine.convert.DateConvert;
 import com.jimmy.groot.engine.convert.DefaultConvert;
+import com.jimmy.groot.engine.data.other.ConditionExpression;
 import com.jimmy.groot.engine.data.other.IndexData;
 import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
@@ -19,13 +21,16 @@ import com.jimmy.groot.engine.metadata.Index;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.core.AggregateEnum;
 import com.jimmy.groot.sql.core.AggregateFunction;
+import com.jimmy.groot.sql.core.Condition;
 import com.jimmy.groot.sql.element.QueryElement;
 import com.jimmy.groot.sql.enums.ColumnTypeEnum;
 import com.jimmy.groot.sql.enums.ConditionEnum;
+import com.jimmy.groot.sql.enums.ConditionTypeEnum;
 import com.jimmy.groot.sql.other.MapComparator;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
@@ -67,6 +72,8 @@ public abstract class AbstractData implements Data {
 
     protected abstract Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception;
 
+    protected abstract Map<String, Object> uniqueKeyToData(String partitionKey, String uniqueKey, Set<String> needColumnNames, boolean isAllColumn) throws Exception;
+
     @Override
     public Collection<Map<String, Object>> query(QueryElement queryElement) {
         try {
@@ -90,6 +97,77 @@ public abstract class AbstractData implements Data {
         } catch (Exception e) {
             log.error("查询失败", e);
             throw new SqlException("select fail:" + e.getMessage());
+        }
+    }
+
+    protected Map<String, Object> uniqueKeyToUniqueData(String partitionKey, String uniqueKey) throws Exception {
+        return this.uniqueKeyToData(partitionKey, uniqueKey, this.uniqueIndex.getColumns(), false);
+    }
+
+    /**
+     * 填充数据
+     *
+     * @param expression
+     * @param uniqueKey
+     * @param total
+     * @param records
+     * @param start
+     * @param needColumnNames
+     * @param isAllColumn
+     */
+    protected void filterAndPut(ConditionExpression expression,
+                                String uniqueKey,
+                                String partitionKey,
+                                AtomicInteger total,
+                                Map<String, Map<String, Object>> records,
+                                int start,
+                                Set<String> needColumnNames,
+                                boolean isAllColumn) throws Exception {
+        Expression otherExpression = expression.getOtherExpression();
+        Expression uniqueExpression = expression.getUniqueExpression();
+        Map<String, Object> otherConditionArgument = expression.getOtherConditionArgument();
+        Map<String, Object> uniqueConditionArgument = expression.getUniqueConditionArgument();
+        //没有过滤条件
+        if (uniqueExpression == null && otherExpression == null) {
+            int i = total.incrementAndGet();
+            if (i > start) {
+                Map<String, Object> data = this.uniqueKeyToData(partitionKey, uniqueKey, needColumnNames, isAllColumn);
+                if (data == null) {
+                    total.decrementAndGet();
+                    return;
+                }
+
+                this.putRecords(records, data);
+            }
+
+            return;
+        }
+
+        if (uniqueExpression != null) {
+            Map<String, Object> uniqueData = this.uniqueKeyToUniqueData(partitionKey, uniqueKey);
+            if (uniqueData == null) {
+                return;
+            }
+
+            if (!this.filter(uniqueData, uniqueConditionArgument, uniqueExpression)) {
+                return;
+            }
+        }
+
+        Map<String, Object> data = this.uniqueKeyToData(partitionKey, uniqueKey, needColumnNames, isAllColumn);
+        if (data == null) {
+            return;
+        }
+
+        if (otherExpression != null) {
+            if (!this.filter(data, otherConditionArgument, otherExpression)) {
+                return;
+            }
+        }
+
+        int i = total.incrementAndGet();
+        if (i > start) {
+            this.putRecords(records, data);
         }
     }
 
@@ -175,11 +253,7 @@ public abstract class AbstractData implements Data {
      * @param i
      * @return
      */
-    protected String getExpCondition(Column column,
-                                     Object fieldValue,
-                                     ConditionEnum conditionEnum,
-                                     Map<String, Object> target,
-                                     int i) {
+    protected String getExpCondition(Column column, Object fieldValue, ConditionEnum conditionEnum, Map<String, Object> target, int i) {
         String name = column.getName();
         String keyName = name + "$" + i;
         StringBuilder conditionExp = new StringBuilder();
