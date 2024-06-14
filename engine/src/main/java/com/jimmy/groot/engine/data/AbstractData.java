@@ -2,29 +2,36 @@ package com.jimmy.groot.engine.data;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.base.Data;
 import com.jimmy.groot.engine.convert.DateConvert;
 import com.jimmy.groot.engine.convert.DefaultConvert;
+import com.jimmy.groot.engine.data.other.IndexData;
 import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.metadata.Index;
 import com.jimmy.groot.platform.other.Assert;
+import com.jimmy.groot.sql.core.AggregateEnum;
+import com.jimmy.groot.sql.core.AggregateFunction;
+import com.jimmy.groot.sql.element.QueryElement;
 import com.jimmy.groot.sql.enums.ColumnTypeEnum;
 import com.jimmy.groot.sql.enums.ConditionEnum;
-import lombok.Getter;
+import com.jimmy.groot.sql.other.MapComparator;
+import lombok.extern.slf4j.Slf4j;
 
-import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
 import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
+@Slf4j
 public abstract class AbstractData implements Data {
 
     private final Map<ColumnTypeEnum, Convert<?>> converts = Maps.newHashMap();
@@ -33,18 +40,17 @@ public abstract class AbstractData implements Data {
 
     protected Index partitionIndex;
 
-    protected List<Column> columns;
+    protected Map<String, Column> columnMap;
 
     public AbstractData(List<Column> columns) {
-        this.columns = columns;
-        this.converts.put(ColumnTypeEnum.DATE, new DateConvert());
-
-        this.columns = columns;
         this.uniqueIndex = new Index("unique key");
         this.partitionIndex = new Index("partition key");
+        this.converts.put(ColumnTypeEnum.DATE, new DateConvert());
 
         for (Column column : columns) {
             String name = column.getName();
+
+            this.columnMap.put(name, column);
 
             if (column.getIsPartitionKey()) {
                 partitionIndex.addColumn(name);
@@ -59,27 +65,126 @@ public abstract class AbstractData implements Data {
         Assert.isTrue(!uniqueIndex.isEmpty(), "唯一键为空");
     }
 
+    protected abstract Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception;
+
+    @Override
+    public Collection<Map<String, Object>> query(QueryElement queryElement) {
+        try {
+            Collection<Map<String, Object>> maps = this.queryList(queryElement);
+            if (CollUtil.isEmpty(maps)) {
+                return Lists.newArrayList();
+            }
+
+            Set<String> select = queryElement.getSelect();
+            List<AggregateFunction> aggregateFunctions = queryElement.getAggregateFunctions();
+
+            if (CollUtil.isNotEmpty(aggregateFunctions)) {
+                return this.aggregateHandler(select, aggregateFunctions, maps);
+            }
+
+            if (CollUtil.isEmpty(select)) {
+                return maps;
+            }
+
+            return maps.stream().map(map -> this.columnFilter(map, select)).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("查询失败", e);
+            throw new SqlException("select fail:" + e.getMessage());
+        }
+    }
+
+    /**
+     * 过滤数据
+     *
+     * @param d
+     * @param conditionArgument
+     * @param expression
+     * @return
+     */
+    protected boolean filter(Map<String, Object> d, Map<String, Object> conditionArgument, Expression expression) {
+        Map<String, Object> param = Maps.newHashMap();
+        param.put(SOURCE_PARAM_KEY, d);
+        param.put(TARGET_PARAM_KEY, conditionArgument);
+        return cn.hutool.core.convert.Convert.toBool(expression.execute(param), false);
+    }
+
+    /**
+     * 聚合函数处理
+     *
+     * @param result
+     * @return
+     */
+    protected Collection<Map<String, Object>> aggregateHandler(Set<String> select, List<AggregateFunction> aggregateFunctions, Collection<Map<String, Object>> result) {
+        if (CollUtil.isEmpty(result)) {
+            return result;
+        }
+
+        if (CollUtil.isEmpty(aggregateFunctions)) {
+            return result;
+        }
+
+        Map<String, Object> doc = Maps.newHashMap();
+
+        for (AggregateFunction aggregateFunction : aggregateFunctions) {
+            doc.put(aggregateFunction.getAlias(), this.aggregateCalculate(result, aggregateFunction.getAggregateType(), aggregateFunction.getColumn()));
+        }
+
+        if (CollUtil.isEmpty(select)) {
+            return Lists.newArrayList(doc);
+        }
+
+        return result.stream().map(map -> {
+            Map<String, Object> data = Maps.newHashMap(doc);
+            for (String s : select) {
+                data.put(s, map.get(s));
+            }
+
+            return data;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 填充数据
+     *
+     * @param records
+     * @param data
+     */
+    protected void putRecords(Map<String, Map<String, Object>> records, Map<String, Object> data) {
+        IndexData indexData = this.getIndexData(data, this.uniqueIndex);
+        records.put(indexData.getKey(), data);
+    }
+
+    /**
+     * select 字段过滤
+     *
+     * @param data
+     * @param select
+     * @return
+     */
+    protected Map<String, Object> columnFilter(Map<String, Object> data, Set<String> select) {
+        return CollUtil.isEmpty(select) ? data : select.stream().collect(Collectors.toMap(s -> s, data::get));
+    }
+
     /**
      * 构建表达式
      *
      * @param column
-     * @param keyConditionValue
      * @param fieldValue
      * @param conditionEnum
      * @param target
      * @param i
      * @return
      */
-    protected String getExpCondition(Column column, Map<String, Set<Object>> keyConditionValue, Object fieldValue, ConditionEnum conditionEnum, Map<String, Object> target, int i) {
+    protected String getExpCondition(Column column,
+                                     Object fieldValue,
+                                     ConditionEnum conditionEnum,
+                                     Map<String, Object> target,
+                                     int i) {
         String name = column.getName();
         String keyName = name + "$" + i;
         StringBuilder conditionExp = new StringBuilder();
         Convert<?> convert = this.getConvert(column.getColumnType());
         conditionExp.append(SOURCE_PARAM_KEY).append(".").append(name);
-
-        if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-            keyConditionValue.computeIfAbsent(name, s -> new HashSet<>());
-        }
 
         switch (conditionEnum) {
             case EQ:
@@ -87,11 +192,6 @@ public abstract class AbstractData implements Data {
 
                 conditionExp.append("==").append(TARGET_PARAM_KEY).append(".").append(keyName);
                 target.put(keyName, eqValue);
-
-                if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-                    keyConditionValue.get(name).add(eqValue);
-                }
-
                 break;
             case GT:
                 conditionExp.append("> ").append(TARGET_PARAM_KEY).append(".").append(keyName);
@@ -123,12 +223,6 @@ public abstract class AbstractData implements Data {
 
                 List<?> inCollect = inCollection.stream().map(convert::convert).collect(Collectors.toList());
                 target.put(keyName, inCollect);
-
-                if (column.getIsUniqueKey() || column.getIsPartitionKey()) {
-                    keyConditionValue.get(name).addAll(inCollect);
-                }
-
-                target.put(keyName, fieldValue);
                 break;
             case NOT_IN:
                 conditionExp.setLength(0);
@@ -173,41 +267,22 @@ public abstract class AbstractData implements Data {
     }
 
 
-
     /**
-     * 获取分区键key
+     * 获取索引key
      *
      * @param doc
      * @return
      */
-    protected IndexData getPartitionData(Map<String, Object> doc) {
-        Map<String, Object> partitionData = Maps.newHashMap();
+    protected IndexData getIndexData(Map<String, Object> doc, Index index) {
+        Map<String, Object> indexData = Maps.newHashMap();
 
-        for (String column : partitionIndex.getColumns()) {
+        for (String column : index.getColumns()) {
             Object o = doc.get(column);
-            Assert.notNull(o, "分区键值为空，字段名:" + column);
-            partitionData.put(column, o);
+            Assert.notNull(o, index.getName() + "值为空，字段名:" + column);
+            indexData.put(column, o);
         }
 
-        return new IndexData(this.getKey(partitionData), partitionData);
-    }
-
-    /**
-     * 获取唯一键key
-     *
-     * @param doc
-     * @return
-     */
-    protected IndexData getUniqueData(Map<String, Object> doc) {
-        Map<String, Object> uniqueData = Maps.newHashMap();
-
-        for (String column : uniqueIndex.getColumns()) {
-            Object o = doc.get(column);
-            Assert.notNull(o, "主键值为空，字段名:" + column);
-            uniqueData.put(column, o);
-        }
-
-        return new IndexData(this.getKey(uniqueData), uniqueData);
+        return new IndexData(this.getKey(indexData), indexData);
     }
 
     /**
@@ -290,7 +365,6 @@ public abstract class AbstractData implements Data {
     }
 
 
-
     /**
      * like字段处理，处理掉百分号
      *
@@ -313,16 +387,28 @@ public abstract class AbstractData implements Data {
         return like;
     }
 
-    @Getter
-    protected static class IndexData implements Serializable {
-
-        private final String key;
-
-        private final Map<String, Object> data;
-
-        public IndexData(String key, Map<String, Object> data) {
-            this.key = key;
-            this.data = data;
+    /**
+     * 获取聚合计算结果
+     *
+     * @param result
+     * @param aggregateEnum
+     * @param name
+     * @return
+     */
+    private Object aggregateCalculate(Collection<Map<String, Object>> result, AggregateEnum aggregateEnum, String name) {
+        switch (aggregateEnum) {
+            case COUNT:
+                return result.size();
+            case MAX:
+                return result.stream().filter(map -> map.get(name) != null).max(new MapComparator(name)).get().get(name);
+            case MIN:
+                return result.stream().filter(map -> map.get(name) != null).min(new MapComparator(name)).get().get(name);
+            case AVG:
+                return result.stream().filter(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name)) != null).mapToDouble(map -> cn.hutool.core.convert.Convert.toDouble(map.get(name))).average().orElse(0D);
+            case SUM:
+                return result.stream().filter(map -> map.get(name) != null).mapToDouble(map -> NumberUtil.parseDouble(map.get(name) != null ? map.get(name).toString() : StrUtil.EMPTY)).sum();
         }
+
+        return null;
     }
 }
