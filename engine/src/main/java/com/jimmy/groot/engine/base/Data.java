@@ -1,6 +1,7 @@
 package com.jimmy.groot.engine.base;
 
 import com.jimmy.groot.sql.core.QueryPlus;
+import com.jimmy.groot.sql.element.QueryElement;
 
 import java.util.Collection;
 import java.util.Map;
@@ -11,8 +12,5 @@ public interface Data {
 
     void remove(Map<String, Object> doc);
 
-    Collection<Map<String, Object>> page(QueryPlus queryPlus, Integer pageNo, Integer pageSize);
-
-
-    Collection<Map<String, Object>> list(QueryPlus queryPlus);
+    Collection<Map<String, Object>> query(QueryElement queryElement);
 }

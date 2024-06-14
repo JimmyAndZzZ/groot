@@ -60,6 +60,17 @@ public abstract class AbstractData implements Data {
     }
 
     /**
+     * select 字段过滤
+     *
+     * @param data
+     * @param select
+     * @return
+     */
+    protected Map<String, Object> columnFilter(Map<String, Object> data, Set<String> select) {
+        return CollUtil.isEmpty(select) ? data : select.stream().collect(Collectors.toMap(s -> s, data::get));
+    }
+
+    /**
      * 构建表达式
      *
      * @param column
@@ -171,7 +182,6 @@ public abstract class AbstractData implements Data {
 
         return conditionExp.toString();
     }
-
 
 
     /**
@@ -288,7 +298,6 @@ public abstract class AbstractData implements Data {
             currentCombination.remove(currentKey); // Backtrack
         }
     }
-
 
 
     /**
