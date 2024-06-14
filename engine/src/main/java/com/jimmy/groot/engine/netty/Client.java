@@ -1,10 +1,14 @@
 package com.jimmy.groot.engine.netty;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimmy.groot.engine.core.ConfigLoad;
+import com.jimmy.groot.engine.exception.ConnectionException;
 import com.jimmy.groot.engine.exception.EngineException;
+import com.jimmy.groot.platform.core.Event;
 import com.jimmy.groot.platform.netty.codec.NettyDecoder;
 import com.jimmy.groot.platform.netty.codec.NettyEncoder;
 import com.jimmy.groot.platform.other.Assert;
+import com.jimmy.groot.platform.serializer.KryoSerializer;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
@@ -30,6 +34,8 @@ public class Client {
     private Bootstrap bootstrap;
 
     private EventLoopGroup group;
+
+    private KryoSerializer kryoSerializer;
 
     @Getter
     private Boolean connectSuccess = false;
@@ -61,9 +67,9 @@ public class Client {
             @Override
             protected void initChannel(SocketChannel channel) throws Exception {
                 ChannelPipeline pipeline = channel.pipeline();
-                pipeline.addLast("decoder", new NettyDecoder(Event.class));
-                pipeline.addLast("encoder", new NettyEncoder(Event.class));
-                pipeline.addLast(new ClientHandler(configLoad, applicationContext, Client.this));
+                pipeline.addLast("decoder", new NettyDecoder(kryoSerializer, Event.class));
+                pipeline.addLast("encoder", new NettyEncoder(kryoSerializer, Event.class));
+                pipeline.addLast(new ClientHandler(configLoad, Client.this));
             }
         });
 
