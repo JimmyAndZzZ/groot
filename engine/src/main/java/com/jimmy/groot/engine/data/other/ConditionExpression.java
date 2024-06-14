@@ -11,8 +11,11 @@ import java.util.Set;
 @Data
 public class ConditionExpression implements Serializable {
 
-    private Expression expression;
+    private Expression otherExpression;
 
-    private Map<String, Object> conditionArgument = Maps.newHashMap();
+    private Expression uniqueExpression;
 
+    private Map<String, Object> otherConditionArgument = Maps.newHashMap();
+
+    private Map<String, Object> uniqueConditionArgument = Maps.newHashMap();
 }
