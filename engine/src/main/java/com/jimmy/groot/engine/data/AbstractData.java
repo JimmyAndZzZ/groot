@@ -11,6 +11,7 @@ import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.base.Data;
 import com.jimmy.groot.engine.convert.DateConvert;
 import com.jimmy.groot.engine.convert.DefaultConvert;
+import com.jimmy.groot.engine.data.other.IndexData;
 import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.engine.metadata.Index;
@@ -18,10 +19,12 @@ import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.sql.core.AggregateEnum;
 import com.jimmy.groot.sql.core.AggregateFunction;
 import com.jimmy.groot.sql.core.QueryPlus;
+import com.jimmy.groot.sql.element.QueryElement;
 import com.jimmy.groot.sql.enums.ColumnTypeEnum;
 import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.other.MapComparator;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.*;
@@ -30,6 +33,7 @@ import java.util.stream.Collectors;
 import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
 import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
+@Slf4j
 public abstract class AbstractData implements Data {
 
     private final Map<ColumnTypeEnum, Convert<?>> converts = Maps.newHashMap();
@@ -62,6 +66,34 @@ public abstract class AbstractData implements Data {
 
         Assert.isTrue(!partitionIndex.isEmpty(), "分区键为空");
         Assert.isTrue(!uniqueIndex.isEmpty(), "唯一键为空");
+    }
+
+    protected abstract Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception;
+
+    @Override
+    public Collection<Map<String, Object>> query(QueryElement queryElement) {
+        try {
+            Collection<Map<String, Object>> maps = this.queryList(queryElement);
+            if (CollUtil.isEmpty(maps)) {
+                return Lists.newArrayList();
+            }
+
+            Set<String> select = queryElement.getSelect();
+            List<AggregateFunction> aggregateFunctions = queryElement.getAggregateFunctions();
+
+            if (CollUtil.isNotEmpty(aggregateFunctions)) {
+                return this.aggregateHandler(select, aggregateFunctions, maps);
+            }
+
+            if (CollUtil.isEmpty(select)) {
+                return maps;
+            }
+
+            return maps.stream().map(map -> this.columnFilter(map, select)).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("查询失败", e);
+            throw new SqlException("select fail:" + e.getMessage());
+        }
     }
 
     /**
@@ -107,7 +139,7 @@ public abstract class AbstractData implements Data {
      */
     protected void putRecords(Map<String, Map<String, Object>> records, Map<String, Object> data) {
         IndexData indexData = this.getIndexData(data, this.uniqueIndex);
-        records.put(indexData.key, data);
+        records.put(indexData.getKey(), data);
     }
 
     /**
@@ -378,18 +410,5 @@ public abstract class AbstractData implements Data {
         }
 
         return null;
-    }
-
-    @Getter
-    protected static class IndexData implements Serializable {
-
-        private final String key;
-
-        private final Map<String, Object> data;
-
-        public IndexData(String key, Map<String, Object> data) {
-            this.key = key;
-            this.data = data;
-        }
     }
 }

@@ -7,23 +7,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.googlecode.aviator.AviatorEvaluator;
 import com.googlecode.aviator.Expression;
 import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.data.lsm.LsmStore;
 import com.jimmy.groot.engine.data.other.ConditionExpression;
-import com.jimmy.groot.engine.data.other.ConditionPart;
+import com.jimmy.groot.engine.data.other.IndexData;
 import com.jimmy.groot.engine.exception.SqlException;
 import com.jimmy.groot.engine.metadata.Column;
-import com.jimmy.groot.engine.metadata.Index;
 import com.jimmy.groot.engine.metadata.Row;
 import com.jimmy.groot.sql.core.AggregateFunction;
 import com.jimmy.groot.sql.core.Condition;
-import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.element.ConditionElement;
 import com.jimmy.groot.sql.element.QueryElement;
-import com.jimmy.groot.sql.enums.ConditionEnum;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
 import lombok.extern.slf4j.Slf4j;
 
@@ -72,7 +68,7 @@ public class LsmData extends AbstractData {
         lsmData.objectMapper = new ObjectMapper();
         lsmData.partitions = Maps.newConcurrentMap();
         lsmData.columnMap = columns.stream().collect(Collectors.toMap(Column::getName, g -> g));
-        lsmData.uniqueStore = LsmStore.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH + lsmData.uniqueIndex.getName() + StrUtil.SLASH, storeThreshold, partSize, expectCount)
+        lsmData.uniqueStore = LsmStore.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH + lsmData.uniqueIndex.getName() + StrUtil.SLASH, storeThreshold, partSize, expectCount);
         return lsmData;
     }
 
@@ -126,38 +122,7 @@ public class LsmData extends AbstractData {
     }
 
     @Override
-    public Collection<Map<String, Object>> query(QueryElement queryElement) {
-        try {
-            Collection<Map<String, Object>> maps = this.queryList(queryElement);
-            if (CollUtil.isEmpty(maps)) {
-                return Lists.newArrayList();
-            }
-
-            Set<String> select = queryElement.getSelect();
-            List<AggregateFunction> aggregateFunctions = queryElement.getAggregateFunctions();
-
-            if (CollUtil.isNotEmpty(aggregateFunctions)) {
-                return super.aggregateHandler(select, aggregateFunctions, maps);
-            }
-
-            if (CollUtil.isEmpty(select)) {
-                return maps;
-            }
-
-            return maps.stream().map(map -> super.columnFilter(map, select)).collect(Collectors.toList());
-        } catch (Exception e) {
-            log.error("查询失败", e);
-            throw new SqlException("select fail:" + e.getMessage());
-        }
-    }
-
-    /**
-     * 查询数据
-     *
-     * @param queryElement
-     * @return
-     */
-    private Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception {
+    protected Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception {
         int end = queryElement.getEnd();
         int start = queryElement.getStart();
         boolean isFindAll = queryElement.isSelectAll();
@@ -167,7 +132,7 @@ public class LsmData extends AbstractData {
         List<ConditionElement> conditionElements = queryElement.getConditionElements();
 
         long sum = partitions.values().stream().mapToLong(LsmStore::total).sum();
-        if (start >= sum) {
+        if (start > sum) {
             return Lists.newArrayList();
         }
         //无条件查询
@@ -461,116 +426,6 @@ public class LsmData extends AbstractData {
         return data;
     }
 
-
-    /**
-     * 收集主键条件
-     *
-     * @param conditions
-     * @return
-     */
-    private Set<String> collectUniqueIndexCondition(List<Condition> conditions) {
-        Map<String, Set<Object>> data = Maps.newHashMap();
-
-        for (int i = conditions.size() - 1; i >= 0; i--) {
-            Condition condition = conditions.get(i);
-
-            String fieldName = condition.getFieldName();
-            Object fieldValue = condition.getFieldValue();
-            ConditionEnum conditionEnum = condition.getConditionEnum();
-
-            if (super.uniqueIndex.contain(fieldName)) {
-                if (conditionEnum.equals(ConditionEnum.EQ) || conditionEnum.equals(ConditionEnum.IN)) {
-                    conditions.remove(i);
-
-                    Convert<?> convert = super.getConvert(columnMap.get(fieldName).getColumnType());
-
-                    switch (conditionEnum) {
-                        case EQ:
-                            Object eqValue = convert.convert(fieldValue);
-                            data.put(fieldName, Sets.newHashSet(eqValue));
-                            break;
-                        case IN:
-                            if (!(fieldValue instanceof Collection)) {
-                                throw new IllegalArgumentException("in 操作需要使用集合类参数");
-                            }
-
-                            Collection<?> inCollection = (Collection<?>) fieldValue;
-                            if (CollUtil.isEmpty(inCollection)) {
-                                throw new IllegalArgumentException("in 集合为空");
-                            }
-
-                            Set<Object> inCollect = inCollection.stream().map(convert::convert).collect(Collectors.toSet());
-                            data.put(fieldName, inCollect);
-                            break;
-                    }
-                }
-            }
-        }
-
-        return super.generateCombinations(data, null).stream().map(super::getKey).collect(Collectors.toSet());
-    }
-
-    /**
-     * 收集分区条件
-     *
-     * @param conditions
-     * @return
-     */
-    private Set<String> collectPartitionIndexCondition(List<Condition> conditions) {
-        Map<String, Set<Object>> data = Maps.newHashMap();
-        Map<String, Condition> conditionMap = Maps.newHashMap();
-
-        for (int i = conditions.size() - 1; i >= 0; i--) {
-            Condition condition = conditions.get(i);
-
-            String fieldName = condition.getFieldName();
-            ConditionEnum conditionEnum = condition.getConditionEnum();
-
-            if (super.partitionIndex.contain(fieldName)) {
-                if (conditionEnum.equals(ConditionEnum.EQ) || conditionEnum.equals(ConditionEnum.IN)) {
-                    if (conditionMap.put(fieldName, condition) != null) {
-                        throw new SqlException("contain many partitionIndex  columns");
-                    }
-                }
-            }
-        }
-
-        if (conditionMap.size() != super.partitionIndex.size()) {
-            throw new SqlException("must contain partitionIndex columns");
-        }
-
-        for (Map.Entry<String, Condition> entry : conditionMap.entrySet()) {
-            String key = entry.getKey();
-            Condition value = entry.getValue();
-            Column column = columnMap.get(key);
-            Object fieldValue = value.getFieldValue();
-            ConditionEnum conditionEnum = value.getConditionEnum();
-
-            Convert<?> convert = super.getConvert(column.getColumnType());
-
-            switch (conditionEnum) {
-                case EQ:
-                    Object eqValue = convert.convert(fieldValue);
-                    data.put(key, Sets.newHashSet(eqValue));
-                    break;
-                case IN:
-                    if (!(fieldValue instanceof Collection)) {
-                        throw new IllegalArgumentException("in 操作需要使用集合类参数");
-                    }
-
-                    Collection<?> inCollection = (Collection<?>) fieldValue;
-                    if (CollUtil.isEmpty(inCollection)) {
-                        throw new IllegalArgumentException("in 集合为空");
-                    }
-
-                    Set<Object> inCollect = inCollection.stream().map(convert::convert).collect(Collectors.toSet());
-                    data.put(key, inCollect);
-                    break;
-            }
-        }
-
-        return super.generateCombinations(data, null).stream().map(super::getKey).collect(Collectors.toSet());
-    }
 
     /**
      * 转字符串

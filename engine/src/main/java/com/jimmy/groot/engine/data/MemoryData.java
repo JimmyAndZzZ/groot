@@ -1,39 +1,21 @@
 package com.jimmy.groot.engine.data;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.util.NumberUtil;
-import cn.hutool.core.util.StrUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.googlecode.aviator.AviatorEvaluator;
-import com.googlecode.aviator.Expression;
-import com.jimmy.groot.engine.base.Convert;
 import com.jimmy.groot.engine.data.memory.MemoryFragment;
 import com.jimmy.groot.engine.data.memory.MemoryPartition;
-import com.jimmy.groot.engine.data.other.ConditionPart;
-import com.jimmy.groot.engine.exception.SqlException;
+import com.jimmy.groot.engine.data.other.IndexData;
 import com.jimmy.groot.engine.metadata.Column;
 import com.jimmy.groot.platform.base.Serializer;
-import com.jimmy.groot.platform.other.Assert;
-import com.jimmy.groot.sql.core.AggregateEnum;
-import com.jimmy.groot.sql.core.AggregateFunction;
-import com.jimmy.groot.sql.core.Condition;
-import com.jimmy.groot.sql.core.QueryPlus;
 import com.jimmy.groot.sql.element.ConditionElement;
 import com.jimmy.groot.sql.element.QueryElement;
-import com.jimmy.groot.sql.enums.ConditionEnum;
-import com.jimmy.groot.sql.enums.ConditionTypeEnum;
-import com.jimmy.groot.sql.other.MapComparator;
-import lombok.Data;
 
-import java.io.Serializable;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
-
-import static com.jimmy.groot.platform.constant.ClientConstant.SOURCE_PARAM_KEY;
-import static com.jimmy.groot.platform.constant.ClientConstant.TARGET_PARAM_KEY;
 
 public class MemoryData extends AbstractData {
 
@@ -54,8 +36,8 @@ public class MemoryData extends AbstractData {
 
     @Override
     public void save(Map<String, Object> doc) {
-        IndexData uniqueData = super.getUniqueData(doc);
-        IndexData partitionData = super.getPartitionData(doc);
+        IndexData uniqueData = super.getIndexData(doc, super.uniqueIndex);
+        IndexData partitionData = super.getIndexData(doc, super.partitionIndex);
 
         String uniqueDataKey = uniqueData.getKey();
         String partitionDataKey = partitionData.getKey();
@@ -66,8 +48,8 @@ public class MemoryData extends AbstractData {
 
     @Override
     public void remove(Map<String, Object> doc) {
-        IndexData uniqueData = super.getUniqueData(doc);
-        IndexData partitionData = super.getPartitionData(doc);
+        IndexData uniqueData = super.getIndexData(doc, super.uniqueIndex);
+        IndexData partitionData = super.getIndexData(doc, super.partitionIndex);
 
         MemoryPartition memoryPartition = partitions.get(partitionData.getKey());
         if (memoryPartition != null) {
@@ -76,15 +58,7 @@ public class MemoryData extends AbstractData {
     }
 
     @Override
-    public Collection<Map<String, Object>> query(QueryElement queryElement) {
-        return null;
-    }
-
-    /**
-     * @param queryElement
-     * @return
-     */
-    private Collection<Map<String, Object>> queryByCondition(QueryElement queryElement) {
+    protected Collection<Map<String, Object>> queryList(QueryElement queryElement) throws Exception {
         int end = queryElement.getEnd();
         int start = queryElement.getStart();
         boolean isFindAll = queryElement.isSelectAll();
@@ -92,51 +66,59 @@ public class MemoryData extends AbstractData {
         Map<String, Map<String, Object>> data = Maps.newHashMap();
         boolean withoutCondition = queryElement.isWithoutCondition();
         Set<String> needColumnNames = queryElement.getNeedColumnNames();
-        ConditionElement conditionElement = queryElement.getConditionElement();
+        List<ConditionElement> conditionElements = queryElement.getConditionElements();
         //超出范围
         int sum = partitions.values().stream().mapToInt(MemoryPartition::count).sum();
-        if (!isFindAll && start >= sum) {
+        if (!isFindAll && start > sum) {
             return Lists.newArrayList();
         }
-        //全分区查询
-        if (withoutCondition) {
-            for (MemoryPartition routeMemoryPartition : partitions.values()) {
-                if (!processPartitionCodes.add(routeMemoryPartition.getCode())) {
-                    continue;
-                }
+        //无条件查询
+        if (withoutCondition || CollUtil.isEmpty(conditionElements)) {
+            return this.queryWithoutCondition(isFindAll, start, end, needColumnNames, allColumn);
+        }
 
-                Collection<MemoryFragment> memoryFragments = routeMemoryPartition.getFragments();
-                if (CollUtil.isEmpty(memoryFragments)) {
-                    continue;
-                }
 
-                for (MemoryFragment memoryFragment : memoryFragments) {
-                    this.filter(memoryFragment.getCode(), memoryFragment.getData(), conditionCollect.getConditionArgument(), expression, isFindAll, data, processUniqueCodes, start);
+        return data.values();
+    }
 
-                    if (!isFindAll && processUniqueCodes.size() == end) {
-                        return data.values();
+
+    /**
+     * 无条件获取数据
+     *
+     * @param isFindAll
+     * @param start
+     * @param end
+     * @param needColumnNames
+     * @param isAllColumn
+     * @return
+     */
+    private Collection<Map<String, Object>> queryWithoutCondition(boolean isFindAll,
+                                                                  int start,
+                                                                  int end,
+                                                                  Set<String> needColumnNames,
+                                                                  boolean isAllColumn) {
+        int i = 0;
+        List<Map<String, Object>> result = Lists.newArrayList();
+
+        for (MemoryPartition value : partitions.values()) {
+            Collection<MemoryFragment> fragments = value.getFragments();
+
+            if (CollUtil.isNotEmpty(fragments)) {
+                for (MemoryFragment fragment : fragments) {
+                    if (!isFindAll && i++ >= end) {
+                        break;
+                    }
+
+                    Map<String, Object> data = fragment.getData();
+
+                    if (isFindAll || i > start) {
+                        result.add(isAllColumn ? data : super.columnFilter(data, needColumnNames));
                     }
                 }
             }
         }
 
-        return data.values();
+        return result;
     }
 
-    /**
-     * 分区查询
-     *
-     * @param routeMemoryPartition
-     * @return
-     */
-    private List<Map<String, Object>> queryWithPartition(QueryElement queryElement, MemoryPartition routeMemoryPartition) {
-        boolean isFindAll = queryElement.isSelectAll();
-        boolean allColumn = queryElement.isAllColumn();
-        boolean withoutCondition = queryElement.isWithoutCondition();
-        Set<String> needColumnNames = queryElement.getNeedColumnNames();
-        ConditionElement conditionElement = queryElement.getConditionElement();
-
-
-
-    }
 }
