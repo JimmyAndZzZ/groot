@@ -35,10 +35,10 @@ public class Client {
 
     private EventLoopGroup group;
 
+    private AtomicInteger retry;
+
     @Getter
     private Boolean connectSuccess = false;
-
-    private AtomicInteger retry = new AtomicInteger(0);
 
     private Client() {
     }
@@ -55,6 +55,7 @@ public class Client {
         client.port = Integer.valueOf(split.get(1));
         client.bootstrap = new Bootstrap();
         client.group = new NioEventLoopGroup();
+        client.retry = new AtomicInteger(0);
         client.bootstrap.group(client.group).channel(NioSocketChannel.class).option(ChannelOption.TCP_NODELAY, true).option(ChannelOption.TCP_NODELAY, Boolean.TRUE).option(ChannelOption.SO_REUSEADDR, Boolean.TRUE).option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT).handler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel channel) throws Exception {
