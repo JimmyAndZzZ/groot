@@ -3,7 +3,7 @@ package com.jimmy.groot.platform.exception;
 import lombok.Getter;
 
 @Getter
-public class SerializerException extends Exception {
+public class SerializerException extends RuntimeException {
 
     private final Exception e;
 

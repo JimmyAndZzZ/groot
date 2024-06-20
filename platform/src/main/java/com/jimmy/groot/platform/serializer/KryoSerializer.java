@@ -30,7 +30,7 @@ public class KryoSerializer implements Serializer {
     });
 
     @Override
-    public byte[] serialize(Object obj) throws SerializerException {
+    public byte[] serialize(Object obj) {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final Output output = new Output(baos, 8192)) {
             Kryo kryo = kryoThreadLocal.get();
@@ -44,7 +44,7 @@ public class KryoSerializer implements Serializer {
     }
 
     @Override
-    public <T> T deserialize(byte[] bytes, Class<T> clazz) throws SerializerException {
+    public <T> T deserialize(byte[] bytes, Class<T> clazz) {
         if (bytes == null) {
             return null;
         }
