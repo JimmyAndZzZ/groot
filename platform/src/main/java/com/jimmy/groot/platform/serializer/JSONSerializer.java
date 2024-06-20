@@ -12,7 +12,7 @@ public class JSONSerializer implements Serializer {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public byte[] serialize(Object o) throws SerializerException {
+    public byte[] serialize(Object o) {
         if (o == null) {
             return null;
         }
@@ -25,7 +25,7 @@ public class JSONSerializer implements Serializer {
     }
 
     @Override
-    public <T> T deserialize(byte[] bytes, Class<T> clazz) throws SerializerException {
+    public <T> T deserialize(byte[] bytes, Class<T> clazz) {
         if (bytes == null) {
             return null;
         }

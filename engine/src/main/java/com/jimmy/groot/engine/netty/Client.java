@@ -4,11 +4,14 @@ import cn.hutool.core.util.StrUtil;
 import com.jimmy.groot.engine.core.ConfigLoad;
 import com.jimmy.groot.engine.exception.ConnectionException;
 import com.jimmy.groot.engine.exception.EngineException;
+import com.jimmy.groot.platform.base.Serializer;
+import com.jimmy.groot.platform.constant.ConfigConstant;
 import com.jimmy.groot.platform.core.Event;
 import com.jimmy.groot.platform.netty.codec.NettyDecoder;
 import com.jimmy.groot.platform.netty.codec.NettyEncoder;
 import com.jimmy.groot.platform.other.Assert;
 import com.jimmy.groot.platform.serializer.KryoSerializer;
+import com.jimmy.groot.platform.serializer.SerializerSupport;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
@@ -35,10 +38,10 @@ public class Client {
 
     private EventLoopGroup group;
 
+    private AtomicInteger retry;
+
     @Getter
     private Boolean connectSuccess = false;
-
-    private AtomicInteger retry = new AtomicInteger(0);
 
     private Client() {
     }
@@ -48,20 +51,21 @@ public class Client {
 
         Assert.isTrue(split.size() == 2, "配置服务端地址异常");
 
-        KryoSerializer kryoSerializer = new KryoSerializer();
+        Serializer serializer = SerializerSupport.getInstance().get(ConfigLoad.get(ConfigConstant.SERIALIZE_TYPE));
 
         Client client = new Client();
         client.server = split.get(0);
         client.port = Integer.valueOf(split.get(1));
         client.bootstrap = new Bootstrap();
         client.group = new NioEventLoopGroup();
+        client.retry = new AtomicInteger(0);
         client.bootstrap.group(client.group).channel(NioSocketChannel.class).option(ChannelOption.TCP_NODELAY, true).option(ChannelOption.TCP_NODELAY, Boolean.TRUE).option(ChannelOption.SO_REUSEADDR, Boolean.TRUE).option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT).handler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel channel) throws Exception {
                 ChannelPipeline pipeline = channel.pipeline();
-                pipeline.addLast("decoder", new NettyDecoder(kryoSerializer, Event.class));
-                pipeline.addLast("encoder", new NettyEncoder(kryoSerializer, Event.class));
-                pipeline.addLast(new ClientHandler(client, kryoSerializer));
+                pipeline.addLast("decoder", new NettyDecoder(serializer, Event.class));
+                pipeline.addLast("encoder", new NettyEncoder(serializer, Event.class));
+                pipeline.addLast(new ClientHandler(client, serializer));
             }
         });
 
