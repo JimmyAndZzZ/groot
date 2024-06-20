@@ -1,13 +1,18 @@
 package com.jimmy.groot.engine.netty;
 
+import com.jimmy.groot.engine.base.Process;
 import com.jimmy.groot.engine.process.ProcessSupport;
 import com.jimmy.groot.platform.base.Serializer;
 import com.jimmy.groot.platform.core.Event;
+import com.jimmy.groot.platform.enums.EventTypeEnum;
+import com.jimmy.groot.platform.exception.SerializerException;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.*;
 
 @Slf4j
