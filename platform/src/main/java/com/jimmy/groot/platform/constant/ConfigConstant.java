@@ -8,4 +8,9 @@ public interface ConfigConstant {
 
         String SERVER_ADDRESS = "server_address";
     }
+
+    interface Center {
+
+        String BOOT_PORT = "boot_port";
+    }
 }
