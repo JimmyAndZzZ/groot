@@ -1,8 +1,14 @@
 package com.jimmy.groot.platform.exception;
 
-public class SerializerException extends RuntimeException {
+import lombok.Getter;
 
-    public SerializerException(String message) {
+@Getter
+public class SerializerException extends Exception {
+
+    private final Exception e;
+
+    public SerializerException(String message, Exception e) {
         super(message);
+        this.e = e;
     }
 }

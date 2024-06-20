@@ -30,7 +30,7 @@ public class KryoSerializer implements Serializer {
     });
 
     @Override
-    public byte[] serialize(Object obj) {
+    public byte[] serialize(Object obj) throws SerializerException {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final Output output = new Output(baos, 8192)) {
             Kryo kryo = kryoThreadLocal.get();
@@ -39,12 +39,12 @@ public class KryoSerializer implements Serializer {
             kryoThreadLocal.remove();
             return output.toBytes();
         } catch (Exception e) {
-            throw new SerializerException("序列化失败");
+            throw new SerializerException("序列化失败", e);
         }
     }
 
     @Override
-    public <T> T deserialize(byte[] bytes, Class<T> clazz) {
+    public <T> T deserialize(byte[] bytes, Class<T> clazz) throws SerializerException {
         if (bytes == null) {
             return null;
         }
@@ -56,7 +56,7 @@ public class KryoSerializer implements Serializer {
             kryoThreadLocal.remove();
             return obj;
         } catch (Exception e) {
-            throw new SerializerException("反序列化失败");
+            throw new SerializerException("反序列化失败", e);
         }
     }
 }

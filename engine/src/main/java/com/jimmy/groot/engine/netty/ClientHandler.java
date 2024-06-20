@@ -1,8 +1,11 @@
 package com.jimmy.groot.engine.netty;
 
 import com.jimmy.groot.engine.core.ConfigLoad;
+import com.jimmy.groot.platform.base.Serializer;
 import com.jimmy.groot.platform.core.Event;
 import com.jimmy.groot.platform.enums.EventTypeEnum;
+import com.jimmy.groot.platform.exception.SerializerException;
+import com.jimmy.groot.platform.serializer.JSONSerializer;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -11,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.*;
+
+import com.jimmy.groot.engine.base.Process;
 
 @Slf4j
 @ChannelHandler.Sharable
@@ -24,26 +29,25 @@ public class ClientHandler extends SimpleChannelInboundHandler<Event> {
             60L, TimeUnit.MILLISECONDS,
             new LinkedBlockingQueue<>());
 
-    private Client client;
+    private final Client client;
 
-    private ConfigLoad configLoad;
+    private final Serializer serializer;
 
-    public ClientHandler(ConfigLoad configLoad, Client client) throws Exception {
+    public ClientHandler(Client client, Serializer serializer) throws Exception {
         super();
-        this.configLoad = configLoad;
         this.client = client;
+        this.serializer = serializer;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-
         super.channelActive(ctx);
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Event event) throws Exception {
         String type = event.getType();
-        String message = event.getMessage();
+        byte[] data = event.getData();
 
         EventTypeEnum eventTypeEnum = EventTypeEnum.queryByCode(type);
         if (eventTypeEnum == null) {
@@ -57,6 +61,12 @@ public class ClientHandler extends SimpleChannelInboundHandler<Event> {
 
                 if (process == null || clazz == null) {
                     return;
+                }
+
+                try {
+                    process.process(serializer.deserialize(data, clazz), ctx);
+                } catch (SerializerException e) {
+                    log.error("反序列化失败");
                 }
             });
         } catch (RejectedExecutionException e) {
