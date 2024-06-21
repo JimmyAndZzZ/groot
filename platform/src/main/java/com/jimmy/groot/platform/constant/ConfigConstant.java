@@ -7,6 +7,12 @@ public interface ConfigConstant {
     interface Client {
 
         String SERVER_ADDRESS = "server_address";
+
+        String ENGINE_ID = "engine_id";
+
+        String IGNORED_NETWORK_INTERFACES = "ignored_network_interfaces";
+
+        String PREFERRED_NETWORKS = "preferred_networks";
     }
 
     interface Center {

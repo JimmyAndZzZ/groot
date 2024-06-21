@@ -33,7 +33,7 @@ public class ConfigLoad {
      * @return
      */
     private void loadProperties() {
-        try (FileInputStream fileInputStream = new FileInputStream("engine.properties");
+        try (FileInputStream fileInputStream = new FileInputStream("center.properties");
              InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
              BufferedReader bfReader = new BufferedReader(inputStreamReader)) {
 
