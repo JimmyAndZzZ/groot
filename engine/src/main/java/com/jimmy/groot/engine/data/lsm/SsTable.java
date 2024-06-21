@@ -31,7 +31,7 @@ public class SsTable implements Closeable {
 
     private TreeMap<String, Position> sparseIndex;
 
-    private SsTable() {
+    public SsTable() {
 
     }
 
@@ -226,7 +226,7 @@ public class SsTable implements Closeable {
     }
 
     @Data
-    private static class Position implements Serializable {
+    public static class Position implements Serializable {
 
         private long start;
 

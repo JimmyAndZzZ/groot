@@ -50,8 +50,6 @@ public class LsmStore {
 
     private LinkedList<SsTable> ssTables;
 
-    private BloomFilter<String> bloomFilter;
-
     private TreeMap<String, TableData> index;
 
     private TreeMap<String, TableData> immutableIndex;
@@ -69,7 +67,6 @@ public class LsmStore {
             lsmStore.storeThreshold = storeThreshold;
             lsmStore.objectMapper = new ObjectMapper();
             lsmStore.indexLock = new ReentrantReadWriteLock();
-            lsmStore.bloomFilter = BloomFilter.create(Funnels.stringFunnel(java.nio.charset.Charset.defaultCharset()), Math.max(expectCount, DEFAULT_BLOOM_EXPECTED), 0.01);
 
             if (!FileUtil.exist(dataDir)) {
                 FileUtil.mkdir(dataDir);
@@ -178,7 +175,6 @@ public class LsmStore {
     }
 
     public void set(String key, String value) {
-        bloomFilter.put(key);
         this.store(key, value, TableDataTypeEnum.SET);
     }
 
@@ -190,10 +186,6 @@ public class LsmStore {
         indexLock.readLock().lock();
 
         try {
-            //优先从布隆过滤器判断
-            if (!bloomFilter.mightContain(key)) {
-                return null;
-            }
             //先从索引中取
             TableData tableData = index.get(key);
             //再尝试从不可变索引中取，此时可能处于持久化ssTable的过程中
