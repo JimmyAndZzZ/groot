@@ -7,7 +7,8 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum EventTypeEnum {
 
-    HEARTBEAT("Heartbeat", "心跳检测");
+    HEARTBEAT("Heartbeat", "心跳检测"),
+    REGISTER("Register", "引擎注册");
 
     private final String code;
 

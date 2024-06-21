@@ -1,14 +1,20 @@
 package com.jimmy.groot.engine.netty;
 
+import com.jimmy.groot.engine.core.ConfigLoad;
 import com.jimmy.groot.engine.core.DestroyHook;
 import com.jimmy.groot.engine.process.ProcessSupport;
 import com.jimmy.groot.platform.base.Serializer;
+import com.jimmy.groot.platform.constant.ConfigConstant;
 import com.jimmy.groot.platform.core.Event;
+import com.jimmy.groot.platform.core.message.Register;
+import com.jimmy.groot.platform.enums.EventTypeEnum;
+import com.jimmy.groot.platform.serializer.SerializerSupport;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.InetAddress;
 import java.util.concurrent.*;
 
 @Slf4j
@@ -34,6 +40,15 @@ public class ClientHandler extends SimpleChannelInboundHandler<Event> {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        Register register = new Register();
+        register.setId(ConfigLoad.getId());
+        register.setIpAddress(ConfigLoad.getLocalIpAddress());
+
+        Event event = new Event();
+        event.setType(EventTypeEnum.REGISTER.getCode());
+        event.setData(SerializerSupport.getInstance().get(ConfigLoad.get(ConfigConstant.SERIALIZE_TYPE)).serialize(register));
+        ctx.writeAndFlush(event);
+
         super.channelActive(ctx);
     }
 
