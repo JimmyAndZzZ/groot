@@ -1,6 +1,7 @@
 package com.jimmy.groot.center.netty;
 
 import com.google.common.collect.Maps;
+import com.jimmy.groot.center.core.DestroyHook;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelId;
 import io.netty.channel.group.ChannelGroup;
@@ -18,6 +19,7 @@ public class ChannelHandlerPool {
     private static final ChannelGroup GLOBAL_GROUP = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
     private ChannelHandlerPool() {
+        DestroyHook.registerHook(ChannelHandlerPool::close);
     }
 
     public static void putChannel(Channel channel) {

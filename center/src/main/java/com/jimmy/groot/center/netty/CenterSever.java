@@ -15,20 +15,8 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
 @Slf4j
 public class CenterSever {
-
-    private final ExecutorService executorService = new ThreadPoolExecutor(
-            10,
-            120,
-            60,
-            TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>());
 
     public void boot() {
         ServerBootstrap bootstrap = new ServerBootstrap();
@@ -53,7 +41,7 @@ public class CenterSever {
                             channel.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(4096));
                             pipeline.addLast("decoder", new NettyDecoder(serializer, Event.class));
                             pipeline.addLast("encoder", new NettyEncoder(serializer, Event.class));
-                            pipeline.addLast(new CenterEventHandler(actionSupport, executorService));
+                            pipeline.addLast(new CenterEventHandler(serializer));
 
                         }
                     });
@@ -68,10 +56,5 @@ public class CenterSever {
             worker.shutdownGracefully();
             boss.shutdownGracefully();
         }
-    }
-
-    public void close() {
-        ChannelHandlerPool.close();
-        executorService.shutdown();
     }
 }

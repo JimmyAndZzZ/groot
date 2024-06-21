@@ -1,11 +1,10 @@
-package com.jimmy.groot.engine.process;
+package com.jimmy.groot.center.action;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ArrayUtil;
-import cn.hutool.core.util.ClassLoaderUtil;
 import cn.hutool.core.util.ClassUtil;
 import cn.hutool.core.util.StrUtil;
-import com.jimmy.groot.engine.base.Process;
+import com.jimmy.groot.center.base.Action;
 import com.jimmy.groot.platform.base.Serializer;
 import com.jimmy.groot.platform.core.Event;
 import com.jimmy.groot.platform.enums.EventTypeEnum;
@@ -20,21 +19,21 @@ import java.util.Map;
 import java.util.Set;
 
 @Slf4j
-public class ProcessSupport implements Process<Event> {
+public class ActionSupport implements Action<Event> {
 
     private final Map<EventTypeEnum, Class<?>> classMap = new HashMap<>();
 
-    private final Map<EventTypeEnum, Process<?>> processMap = new HashMap<>();
+    private final Map<EventTypeEnum, Action<?>> actionMap = new HashMap<>();
 
     private final Serializer serializer;
 
-    public ProcessSupport(Serializer serializer) throws InstantiationException, IllegalAccessException {
+    public ActionSupport(Serializer serializer) throws InstantiationException, IllegalAccessException {
         this.serializer = serializer;
 
         Set<Class<?>> classes = ClassUtil.scanPackage(this.getClass().getPackage().getName());
         if (CollUtil.isNotEmpty(classes)) {
             for (Class<?> clazz : classes) {
-                EventTypeEnum eventTypeEnum = EventTypeEnum.queryByCode(StrUtil.removeAll(clazz.getName(), Process.class.getSimpleName()));
+                EventTypeEnum eventTypeEnum = EventTypeEnum.queryByCode(StrUtil.removeAll(clazz.getName(), Action.class.getSimpleName()));
                 if (eventTypeEnum == null) {
                     continue;
                 }
@@ -47,11 +46,11 @@ public class ProcessSupport implements Process<Event> {
                     continue;
                 }
 
-                if (!this.isProcess(clazz)) {
+                if (!this.isAction(clazz)) {
                     continue;
                 }
 
-                processMap.put(eventTypeEnum, (Process<?>) clazz.newInstance());
+                actionMap.put(eventTypeEnum, (Action<?>) clazz.newInstance());
 
                 Type[] genericInterfaces = clazz.getGenericInterfaces();
                 if (ArrayUtil.isNotEmpty(genericInterfaces)) {
@@ -72,7 +71,7 @@ public class ProcessSupport implements Process<Event> {
     }
 
     @Override
-    public void process(Event event, ChannelHandlerContext channelHandlerContext) {
+    public void action(Event event, ChannelHandlerContext channelHandlerContext) {
         String type = event.getType();
         byte[] data = event.getData();
 
@@ -82,14 +81,14 @@ public class ProcessSupport implements Process<Event> {
         }
 
         Class<?> clazz = classMap.get(eventTypeEnum);
-        Process process = processMap.get(eventTypeEnum);
+        Action action = actionMap.get(eventTypeEnum);
 
-        if (process == null || clazz == null) {
+        if (action == null || clazz == null) {
             return;
         }
 
         try {
-            process.process(serializer.deserialize(data, clazz), channelHandlerContext);
+            action.action(serializer.deserialize(data, clazz), channelHandlerContext);
         } catch (SerializerException e) {
             log.error("反序列化失败", e.getE());
         } catch (Exception e) {
@@ -98,22 +97,22 @@ public class ProcessSupport implements Process<Event> {
     }
 
     /**
-     * 判断是否是process类
+     * 判断是否是Action类
      *
      * @param clazz
      * @return
      */
-    private boolean isProcess(Class<?> clazz) {
+    private boolean isAction(Class<?> clazz) {
         Class<?>[] interfaces = clazz.getInterfaces();
         if (ArrayUtil.isNotEmpty(interfaces)) {
             for (Class<?> anInterface : interfaces) {
-                if (anInterface.equals(Process.class)) {
+                if (anInterface.equals(Action.class)) {
                     return true;
                 }
             }
         }
 
         Class<?> superclass = clazz.getSuperclass();
-        return superclass != null && this.isProcess(superclass);
+        return superclass != null && this.isAction(superclass);
     }
 }
