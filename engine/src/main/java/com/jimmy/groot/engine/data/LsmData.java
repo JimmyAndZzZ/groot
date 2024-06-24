@@ -68,7 +68,7 @@ public class LsmData extends AbstractData {
             for (File file : files) {
                 if (file.isDirectory()) {
                     String name = file.getName();
-                    lsmData.partitions.put(name, LsmStore.build(file.getPath(), storeThreshold, partSize, expectCount));
+                    lsmData.partitions.put(name, LsmStore.build(file.getPath() + StrUtil.SLASH, storeThreshold, partSize, expectCount));
                 }
             }
         }
