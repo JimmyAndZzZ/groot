@@ -1,7 +1,9 @@
 package com.jimmy.groot.engine.data;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.StrUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
@@ -20,6 +22,7 @@ import com.jimmy.groot.sql.element.QueryElement;
 import com.jimmy.groot.sql.enums.ConditionTypeEnum;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,6 +62,18 @@ public class LsmData extends AbstractData {
         lsmData.objectMapper = new ObjectMapper();
         lsmData.partitions = Maps.newConcurrentMap();
         lsmData.uniqueStore = LsmStore.build(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH + lsmData.uniqueIndex.getName() + StrUtil.SLASH, storeThreshold, partSize, expectCount);
+
+        File[] files = FileUtil.newFile(dataDir + StrUtil.SLASH + tableName + StrUtil.SLASH).listFiles();
+        if (ArrayUtil.isNotEmpty(files)) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    String name = file.getName();
+                    lsmData.partitions.put(name, LsmStore.build(file.getPath() + StrUtil.SLASH, storeThreshold, partSize, expectCount));
+                }
+            }
+        }
+
+
         return lsmData;
     }
 

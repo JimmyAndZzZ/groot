@@ -31,7 +31,7 @@ public class SsTable implements Closeable {
 
     private TreeMap<String, Position> sparseIndex;
 
-    private SsTable() {
+    public SsTable() {
 
     }
 
@@ -64,16 +64,25 @@ public class SsTable implements Closeable {
     }
 
     TreeMap<String, TableData> load() {
+        TreeMap<String, TableData> data = new TreeMap<>();
+
         try {
-            long dataLen = tableMetaData.getDataLen();
-            long dataStart = tableMetaData.getDataStart();
-            //读取所有数据
-            byte[] indexBytes = new byte[(int) dataLen];
-            tableFile.seek(dataStart);
-            tableFile.read(indexBytes);
-            String dataStr = new String(indexBytes, StandardCharsets.UTF_8);
-            return objectMapper.readValue(dataStr, new TypeReference<TreeMap<String, TableData>>() {
-            });
+            for (Map.Entry<String, Position> stringPositionEntry : sparseIndex.entrySet()) {
+                Position value = stringPositionEntry.getValue();
+
+                long start = value.getStart();
+                long len = value.getLen();
+
+                byte[] indexBytes = new byte[(int) len];
+                tableFile.seek(start);
+                tableFile.read(indexBytes);
+
+                String dataStr = new String(indexBytes, StandardCharsets.UTF_8);
+                data.putAll(objectMapper.readValue(dataStr, new TypeReference<TreeMap<String, TableData>>() {
+                }));
+            }
+
+            return data;
         } catch (Exception e) {
             log.error("读取ssTable数据失败", e);
             throw new EngineException("读取ssTable数据失败");
@@ -226,7 +235,7 @@ public class SsTable implements Closeable {
     }
 
     @Data
-    private static class Position implements Serializable {
+    public static class Position implements Serializable {
 
         private long start;
 

@@ -14,13 +14,13 @@ public class TableData implements Serializable {
 
     private TableDataTypeEnum tableDataType;
 
-    TableData(String key, String value, TableDataTypeEnum tableDataType) {
+    public TableData(String key, String value, TableDataTypeEnum tableDataType) {
         this.key = key;
         this.value = value;
         this.tableDataType = tableDataType;
     }
 
-    TableData() {
+    public TableData() {
         
     }
 }
